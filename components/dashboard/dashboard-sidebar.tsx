@@ -24,7 +24,11 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-export const DashboardSidebar = () => {
+interface DashboardSidebarProps {
+  unreadAlerts?: number;
+}
+
+export const DashboardSidebar = ({ unreadAlerts = 0 }: DashboardSidebarProps) => {
   const pathname = usePathname();
 
   return (
@@ -53,6 +57,11 @@ export const DashboardSidebar = () => {
             >
               <item.icon className="size-4 shrink-0" aria-hidden />
               {item.label}
+              {item.href === "/alerts" && unreadAlerts > 0 && (
+                <span className="ml-auto flex size-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white">
+                  {unreadAlerts > 9 ? "9+" : unreadAlerts}
+                </span>
+              )}
             </Link>
           );
         })}

@@ -15,17 +15,24 @@ const DashboardLayout = async ({ children }: { children: React.ReactNode }) => {
     redirect("/login");
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("plan, scans_this_month")
-    .eq("id", user.id)
-    .single();
+  const [{ data: profile }, { count: unreadAlerts }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("plan, scans_this_month")
+      .eq("id", user.id)
+      .single(),
+    supabase
+      .from("alerts")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .eq("read", false),
+  ]);
 
   const showBanner = profile && profile.plan === "free" && profile.scans_this_month > 0;
 
   return (
     <div className="flex min-h-full flex-1">
-      <DashboardSidebar />
+      <DashboardSidebar unreadAlerts={unreadAlerts ?? 0} />
       <div className="flex min-w-0 flex-1 flex-col">
         <DashboardHeader email={user.email ?? ""} />
         {showBanner && <UpgradeBanner scansThisMonth={profile.scans_this_month} />}
