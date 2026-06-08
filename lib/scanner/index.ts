@@ -3,15 +3,15 @@ import { Issue, ScanResult, ServerResult, Grade, Severity } from './types';
 import { scanForSecrets } from './patterns';
 import { checkForVulnerablePackages } from './known-vulnerabilities';
 
-const McpServerSchema = z.object({
+const McpServerSchema = z.looseObject({
   command: z.string().optional(),
   url: z.string().optional(),
   args: z.array(z.string()).optional(),
-  env: z.record(z.string()).optional(),
-}).passthrough();
+  env: z.record(z.string(), z.string()).optional(),
+});
 
 const McpConfigSchema = z.object({
-  mcpServers: z.record(McpServerSchema),
+  mcpServers: z.record(z.string(), McpServerSchema),
 });
 
 function calculateGrade(score: number): Grade {
@@ -186,7 +186,7 @@ export function scanMcpConfig(configJson: string): ScanResult {
     };
   }
 
-  const serverResults = serverNames.map(name => scanServer(name, mcpServers[name]));
+  const serverResults = serverNames.map(name => scanServer(name, mcpServers[name] as z.infer<typeof McpServerSchema>));
 
   const totalScore = serverResults.reduce((sum, s) => sum + s.score, 0);
   const averageScore = Math.round(totalScore / serverResults.length);
