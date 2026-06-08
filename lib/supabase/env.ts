@@ -27,6 +27,16 @@ export const getSupabaseAnonKey = () => {
   return key;
 };
 
+export const getServiceRoleKey = () => {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!key) {
+    throw new Error("Missing SUPABASE_SERVICE_ROLE_KEY.");
+  }
+
+  return key;
+};
+
 export const getSiteUrl = () => {
   return (
     process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ??
