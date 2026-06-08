@@ -1,0 +1,108 @@
+# Project Overview
+You are building "ShieldMCP" — a web-based MCP (Model Context Protocol) 
+Security Scanner and Continuous Monitoring Dashboard.
+
+## What This App Does
+ShieldMCP lets developers paste their MCP server configuration (JSON) 
+and instantly get a security grade (A through F) showing vulnerabilities 
+in their MCP servers. It checks for:
+- Hardcoded secrets/API keys in configs
+- Known CVE vulnerabilities
+- Missing authentication
+- Tool poisoning (malicious hidden instructions)
+- Path traversal risks
+- Command injection risks
+
+Paid users get continuous monitoring: daily re-scans with email alerts 
+when new vulnerabilities are found.
+
+## Tech Stack (DO NOT DEVIATE)
+- Framework: Next.js 15 (App Router ONLY — no Pages Router)
+- Language: TypeScript (strict mode)
+- Styling: Tailwind CSS + shadcn/ui components
+- Database: Supabase (PostgreSQL + Auth + Row Level Security)
+- Payments: Stripe (Checkout + Customer Portal + Webhooks)
+- Email: Resend (for alerts)
+- Hosting: Vercel
+- State Management: React Server Components where possible, 
+  client components only when interactivity is required
+
+## Architecture Rules
+- Use the app/ directory for all routes
+- Server Components by default; add "use client" ONLY when needed
+- All database calls go through Supabase client
+- API routes in app/api/ directory
+- Use Zod for all input validation
+- Use TypeScript interfaces for all data types
+- Environment variables for ALL secrets (never hardcode)
+- Use loading.tsx and error.tsx for each route segment
+
+## Database Conventions
+- Table names: snake_case, plural (e.g., scans, alerts, profiles)
+- Column names: snake_case
+- Always include: id (UUID), created_at (timestamptz)
+- Enable Row Level Security on ALL tables
+- Foreign keys reference profiles(id) for user ownership
+
+## Component Conventions
+- One component per file
+- File names: kebab-case (e.g., scan-results-card.tsx)
+- Component names: PascalCase (e.g., ScanResultsCard)
+- Use shadcn/ui for all UI elements
+- Props defined with TypeScript interface above component
+
+## Code Style
+- Prefer const over let
+- Arrow functions for components and handlers
+- Async/await over .then() chains
+- Early returns for guard clauses
+- Descriptive variable names (no single letters except in loops)
+- Comments only for "why", not "what"
+
+## Error Handling
+- Try/catch in all async functions
+- User-friendly error messages (never expose stack traces)
+- Toast notifications for user actions via sonner
+- Console.error for debugging only in development
+
+## Security
+- Validate ALL user input with Zod before processing
+- Sanitize any output displayed from user-submitted data
+- Use Supabase RLS policies — never trust client-side auth alone
+- Rate limit API routes
+- NEVER store API keys or secrets in code
+
+## File Structure
+app/
+├── (marketing)/          # Landing page, pricing
+│   ├── page.tsx           # Homepage
+│   └── pricing/page.tsx   # Pricing page
+├── (auth)/               # Auth routes
+│   ├── login/page.tsx
+│   └── signup/page.tsx
+├── (dashboard)/          # Protected app routes
+│   ├── layout.tsx         # Dashboard layout with sidebar
+│   ├── dashboard/page.tsx # Main dashboard
+│   ├── scan/page.tsx      # New scan page
+│   ├── reports/page.tsx   # Scan history
+│   ├── monitors/page.tsx  # Continuous monitoring
+│   ├── alerts/page.tsx    # Alert center
+│   └── settings/page.tsx  # Account settings
+├── api/
+│   ├── scan/route.ts      # POST: Run security scan
+│   ├── webhooks/
+│   │   └── stripe/route.ts # Stripe webhooks
+│   └── cron/
+│       └── monitor/route.ts # Daily monitoring cron
+├── layout.tsx             # Root layout
+└── globals.css            # Global styles
+
+## Important Context
+- This is a freemium SaaS: free users get 3 scans/month, 
+  Pro users ($29/mo) get unlimited scans + continuous monitoring
+- The primary user is a developer who uses AI coding tools 
+  (Cursor, Claude, GitHub Copilot) with MCP servers
+- The security scan parses JSON config files and checks each 
+  MCP server for known vulnerability patterns
+- Keep the UI clean, professional, and developer-focused
+- Mobile responsiveness is secondary — desktop-first
