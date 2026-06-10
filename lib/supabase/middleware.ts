@@ -1,41 +1,29 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
+import { getSupabaseUrl } from "@/lib/supabase/env";
+
+const projectRef = getSupabaseUrl().match(/https:\/\/(.+)\.supabase\.co/)?.[1] ?? "";
 
 export const updateSession = async (request: NextRequest) => {
-  let supabaseResponse = NextResponse.next({
-    request,
-  });
+  const supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    getSupabaseUrl(),
-    getSupabaseAnonKey(),
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value);
-          });
+  // Try to get authenticated user from the Supabase auth cookie
+  // The cookie contains the full session JWT; we decode the payload client-side style
+  const authCookieName = `sb-${projectRef}-auth-token`;
+  const authCookie = request.cookies.get(authCookieName);
 
-          supabaseResponse = NextResponse.next({
-            request,
-          });
+  let user: { id: string; email?: string } | null = null;
 
-          cookiesToSet.forEach(({ name, value, options }) => {
-            supabaseResponse.cookies.set(name, value, options);
-          });
-        },
-      },
-    },
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  if (authCookie?.value) {
+    try {
+      const parsed = JSON.parse(authCookie.value);
+      if (parsed?.user?.id) {
+        user = { id: parsed.user.id, email: parsed.user.email };
+      }
+    } catch {
+      // Invalid auth cookie — user not authenticated
+    }
+  }
 
   return { supabaseResponse, user };
 };
