@@ -1,0 +1,29 @@
+# Dockerfile.scanner-probe
+# Sandboxed MCP Security Scanner Probe Worker
+# This container is DESTROYED after every scan.
+# It has NO access to the host system.
+
+FROM node:20-alpine
+
+# Only essential packages — minimize attack surface
+RUN apk add --no-cache curl ca-certificates
+
+# Create non-root user
+RUN adduser -D -s /bin/sh scanner
+USER scanner
+
+# Copy probe worker code
+WORKDIR /app
+COPY scripts/probe-worker.js /app/probe-worker.js
+
+# Output directory (shared via --tmpfs, not host volume)
+RUN mkdir -p /tmp/scan-output
+
+# Security hardening via docker run flags (not here):
+#   --read-only, --cap-drop=ALL, --security-opt=no-new-privileges
+#   --pids-limit=50, --memory=512m, --cpus=0.5
+#   --tmpfs /tmp:rw,noexec,nosuid,size=64m
+#   --network=scanner-isolated
+#   --stop-timeout 30
+
+ENTRYPOINT ["node", "/app/probe-worker.js"]

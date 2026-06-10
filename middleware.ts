@@ -9,6 +9,12 @@ const protectedRoutes = [
   "/monitors",
   "/alerts",
   "/settings",
+  "/servers",
+  "/sessions",
+  "/activity",
+  "/telemetry",
+  "/compliance",
+  "/onboarding",
 ];
 
 export const middleware = async (request: NextRequest) => {

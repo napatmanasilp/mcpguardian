@@ -1,4 +1,6 @@
+import { render } from "@react-email/components";
 import { Resend } from "resend";
+import React, { type ComponentType } from "react";
 
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -6,8 +8,68 @@ const resend = process.env.RESEND_API_KEY
 
 const FROM_ADDRESS =
   process.env.NODE_ENV === "production"
-    ? "ShieldMCP Alerts <alerts@shieldmcp.dev>"
+    ? "MCPGuardian Alerts <alerts@mcpguardian.dev>"
     : "onboarding@resend.dev";
+
+// ─── Generic Send Email ────────────────────────────────────────────────
+
+interface SendEmailProps<T> {
+  /** The React Email template component */
+  template: ComponentType<T>;
+  /** Props to pass to the template */
+  props: T;
+  /** Recipient email address(es) */
+  to: string | string[];
+  /** Email subject line */
+  subject: string;
+  /** Optional reply-to address */
+  replyTo?: string;
+}
+
+/**
+ * Send an email using a React Email template.
+ *
+ * Usage:
+ * ```ts
+ * await sendEmail({
+ *   template: WelcomeEmail,
+ *   props: { userName: "Alice" },
+ *   to: "alice@example.com",
+ *   subject: "Welcome to MCPGuardian!",
+ * });
+ * ```
+ */
+export async function sendEmail<T>(
+  opts: SendEmailProps<T>,
+): Promise<void> {
+  if (!resend) {
+    console.warn("Resend not configured: RESEND_API_KEY is missing");
+    return;
+  }
+
+  try {
+    const { template, props, to, subject, replyTo } = opts;
+
+    const html = await render(
+      React.createElement(
+        template as ComponentType<Record<string, unknown>>,
+        props as Record<string, unknown>,
+      ),
+    );
+
+    await resend.emails.send({
+      from: FROM_ADDRESS,
+      to: Array.isArray(to) ? to : [to],
+      subject,
+      html,
+      ...(replyTo ? { replyTo } : {}),
+    });
+  } catch (error) {
+    console.error("Failed to send email:", error);
+  }
+}
+
+// ─── Legacy Alert Email (keep for backward compat) ──────────────────────
 
 interface AlertEmailParams {
   to: string;
@@ -33,16 +95,13 @@ function buildSubject(params: AlertEmailParams): string {
 }
 
 function buildSeverityBadge(severity: string): string {
-  switch (severity) {
-    case "critical":
-      return `<span style="display:inline-block;background:#dc2626;color:white;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;text-transform:uppercase">Critical</span>`;
-    case "high":
-      return `<span style="display:inline-block;background:#ea580c;color:white;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;text-transform:uppercase">High</span>`;
-    case "medium":
-      return `<span style="display:inline-block;background:#ca8a04;color:white;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;text-transform:uppercase">Medium</span>`;
-    default:
-      return `<span style="display:inline-block;background:#6b7280;color:white;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;text-transform:uppercase">Unknown</span>`;
-  }
+  const colors: Record<string, string> = {
+    critical: "#dc2626",
+    high: "#ea580c",
+    medium: "#ca8a04",
+  };
+  const bg = colors[severity] ?? "#6b7280";
+  return `<span style="display:inline-block;background:${bg};color:white;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;text-transform:uppercase">${severity.charAt(0).toUpperCase() + severity.slice(1)}</span>`;
 }
 
 function buildHtmlEmail(params: AlertEmailParams): string {
@@ -56,7 +115,7 @@ function buildHtmlEmail(params: AlertEmailParams): string {
 <table align="center" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;margin:24px auto;background:#ffffff;border-radius:8px;overflow:hidden">
 <tr>
 <td style="padding:32px 24px 16px;text-align:center;border-bottom:1px solid #e4e4e7">
-<h1 style="margin:0;font-size:20px;font-weight:700;color:#18181b">ShieldMCP Security Alert</h1>
+<h1 style="margin:0;font-size:20px;font-weight:700;color:#18181b">MCPGuardian Security Alert</h1>
 </td>
 </tr>
 <tr>
@@ -78,7 +137,7 @@ function buildHtmlEmail(params: AlertEmailParams): string {
 </tr>
 <tr>
 <td style="padding:16px 24px;background:#f4f4f5;text-align:center">
-<p style="margin:0;font-size:12px;color:#71717a">You're receiving this because you have active monitoring on ShieldMCP.</p>
+<p style="margin:0;font-size:12px;color:#71717a">You're receiving this because you have active monitoring on MCPGuardian.</p>
 </td>
 </tr>
 </table>

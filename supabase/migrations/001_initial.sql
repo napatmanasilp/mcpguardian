@@ -1,5 +1,7 @@
 -- ShieldMCP initial schema
--- Run manually in the Supabase SQL editor.
+-- Run via: npx tsx scripts/apply-migrations.ts
+-- Or paste into: https://supabase.com/dashboard/project/YOUR_REF/sql/new
+-- Or verify setup at: http://localhost:3000/api/setup-check
 
 -- ---------------------------------------------------------------------------
 -- Tables

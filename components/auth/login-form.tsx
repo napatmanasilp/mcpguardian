@@ -49,7 +49,7 @@ export const LoginForm = ({ redirectTo }: LoginFormProps) => {
       <div className="space-y-2 text-center">
         <h1 className="text-2xl font-semibold tracking-tight">Welcome back</h1>
         <p className="text-sm text-muted-foreground">
-          Sign in to your ShieldMCP account
+          Sign in to your MCPGuardian account
         </p>
       </div>
 

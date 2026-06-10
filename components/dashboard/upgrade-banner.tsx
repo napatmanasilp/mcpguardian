@@ -1,31 +1,56 @@
 "use client";
 
 import { useState } from "react";
+import { Bolt, X } from "lucide-react";
 import Link from "next/link";
-import { Info, X } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { openTopUpModal } from "@/lib/usage";
 
 interface UpgradeBannerProps {
   scansThisMonth: number;
+  checksPurchased?: number;
 }
 
-export const UpgradeBanner = ({ scansThisMonth }: UpgradeBannerProps) => {
+export const UpgradeBanner = ({
+  scansThisMonth,
+  checksPurchased = 0,
+}: UpgradeBannerProps) => {
   const [dismissed, setDismissed] = useState(false);
 
   if (dismissed) return null;
 
+  const remaining = Math.max(0, 100 + checksPurchased - scansThisMonth);
+  const isOverLimit = remaining === 0;
+
   return (
-    <Alert className="rounded-none border-x-0 border-t-0 bg-indigo-50 dark:bg-indigo-950/30">
-      <Info className="size-4 text-indigo-500" />
+    <Alert className="rounded-none border-x-0 border-t-0 bg-amber-950/20 border-amber-500/20">
       <AlertDescription className="flex items-center justify-between gap-4">
-        <span>
-          You&apos;ve used {scansThisMonth} of 3 free scans this month. Upgrade to Pro for unlimited scans.
+        <span className="text-sm">
+          {isOverLimit
+            ? "You've used all your checks this month."
+            : `You've used ${scansThisMonth} of ${100 + checksPurchased} checks this month.`}
         </span>
         <div className="flex shrink-0 items-center gap-2">
-          <Button variant="link" size="sm" className="h-auto px-0 text-indigo-600 dark:text-indigo-400" asChild>
-            <Link href="/pricing">Upgrade</Link>
+          {!isOverLimit && (
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto px-0 text-amber-400 gap-1"
+              onClick={() => openTopUpModal()}
+            >
+              <Bolt className="size-3" />
+              Top Up
+            </Button>
+          )}
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto px-0 text-amber-400"
+            asChild
+          >
+            <Link href="/billing/upgrade">Upgrade</Link>
           </Button>
           <button
             type="button"

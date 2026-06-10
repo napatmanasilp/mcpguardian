@@ -1,43 +1,95 @@
-import { Separator } from "@/components/ui/separator";
+"use client";
 
-const stats = [
-  { value: "10,000+", label: "MCP servers scanned" },
-  { value: "50+", label: "CVEs tracked" },
-];
+import { useEffect, useState } from "react";
 
-const companies = ["Vercel", "Stripe", "Linear", "Supabase", "Cursor"];
+
+
+// ─── CountUp Animation ─────────────────────────────────────────────────
+
+function CountUp({ value, suffix = "" }: { value: number; suffix?: string }) {
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    const step = Math.max(1, Math.ceil(value / 40));
+    let current = 0;
+    const timer = setInterval(() => {
+      current = Math.min(current + step, value);
+      setDisplay(Math.round(current));
+      if (current >= value) clearInterval(timer);
+    }, 30);
+    return () => clearInterval(timer);
+  }, [value]);
+
+  return (
+    <>
+      {display.toLocaleString()}
+      {suffix}
+    </>
+  );
+}
+
+// ─── Component ─────────────────────────────────────────────────────────
 
 export const SocialProofSection = () => {
+  const [stats, setStats] = useState<{
+    scans: number;
+    cves: number;
+    rugPulls: number;
+    monitors: number;
+  } | null>(null);
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const res = await fetch("/api/stats");
+        if (res.ok) {
+          setStats(await res.json());
+        }
+      } catch {
+        // silently fail — static fallback below
+      }
+    };
+    fetchStats();
+  }, []);
+
+  const statItems = [
+    {
+      value: stats?.scans ?? 0,
+      label: "MCP servers scanned",
+    },
+    {
+      value: stats?.rugPulls ?? 0,
+      label: "Rug pulls detected",
+    },
+    {
+      value: stats?.cves ?? 0,
+      label: "CVEs tracked",
+    },
+    {
+      value: stats?.monitors ?? 0,
+      label: "Configs monitored",
+    },
+  ];
+
   return (
-    <section className="border-b border-border/60 bg-muted/20">
+    <section className="border-b border-white/10 bg-white/[0.02]">
       <div className="mx-auto max-w-6xl px-6 py-14">
-        <div className="grid gap-10 md:grid-cols-[1fr_auto_1fr] md:items-center">
-          <div className="flex flex-wrap justify-center gap-10 md:justify-end">
-            {stats.map((stat) => (
-              <div key={stat.label} className="text-center md:text-right">
-                <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
-                <p className="mt-1 text-sm text-muted-foreground">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <Separator orientation="vertical" className="hidden h-16 md:block" />
-
-          <div className="text-center md:text-left">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Trusted by developers at
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 md:justify-start">
-              {companies.map((company) => (
-                <span
-                  key={company}
-                  className="text-sm font-semibold tracking-wide text-muted-foreground/80"
-                >
-                  {company}
-                </span>
-              ))}
+        <p className="text-center text-xs font-mono text-slate-500 uppercase tracking-widest mb-8">
+          Trusted by security teams worldwide
+        </p>
+        <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
+          {statItems.map((stat) => (
+            <div key={stat.label} className="text-center">
+              <p className="text-3xl font-bold tracking-tight tabular-nums text-slate-200">
+                {stats ? (
+                  <CountUp value={stat.value} />
+                ) : (
+                  <span>0</span>
+                )}
+              </p>
+              <p className="mt-1 text-sm text-slate-400">{stat.label}</p>
             </div>
-          </div>
+          ))}
         </div>
       </div>
     </section>

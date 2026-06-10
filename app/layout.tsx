@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ShieldMCP — MCP Security Scanner",
+  title: "MCPGuardian — MCP Security Scanner",
   description:
     "Scan MCP server configurations for security vulnerabilities and get continuous monitoring.",
 };
@@ -33,7 +33,7 @@ const RootLayout = ({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+        <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" disableTransitionOnChange>
           {children}
           <Toaster richColors closeButton position="top-right" />
         </ThemeProvider>

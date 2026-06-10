@@ -18,12 +18,18 @@ interface ScanRow {
 }
 
 interface ReportSheetClientProps {
-  scanId: string;
   scanData: ScanRow;
-  triggerLabel: string;
+  triggerLabel?: string;
+  triggerVariant?: "button" | "card";
+  children?: React.ReactNode;
 }
 
-export const ReportSheetClient = ({ scanId, scanData, triggerLabel }: ReportSheetClientProps) => {
+export const ReportSheetClient = ({
+  scanData,
+  triggerLabel = "View",
+  triggerVariant = "button",
+  children,
+}: ReportSheetClientProps) => {
   const [open, setOpen] = useState(false);
 
   const result = scanData.results as ScanResult | null;
@@ -39,9 +45,13 @@ export const ReportSheetClient = ({ scanId, scanData, triggerLabel }: ReportShee
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="sm">
-          {triggerLabel}
-        </Button>
+        {triggerVariant === "card" ? (
+          children
+        ) : (
+          <Button variant="ghost" size="sm">
+            {triggerLabel}
+          </Button>
+        )}
       </SheetTrigger>
       <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
         <SheetHeader className="mb-6">

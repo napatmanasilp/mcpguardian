@@ -53,9 +53,11 @@ export const POST = async (request: NextRequest) => {
       .eq("id", user.id)
       .single();
 
-    if (profile?.plan !== "pro") {
+    // Monitors available on Developer, Team, Startup, and Enterprise plans
+    const blockedPlans = ["free", "payg"];
+    if (profile && blockedPlans.includes(profile.plan)) {
       return NextResponse.json(
-        { error: "Continuous monitoring requires a Pro plan." },
+        { error: "Continuous monitoring requires a paid plan (Developer, Team, Startup, or Enterprise)." },
         { status: 403 },
       );
     }
@@ -107,7 +109,7 @@ export const POST = async (request: NextRequest) => {
 
     let scanResult;
     try {
-      scanResult = scanMcpConfig(config);
+      scanResult = await scanMcpConfig(config);
     } catch {
       return NextResponse.json(
         { ...monitor, initialScan: null },
