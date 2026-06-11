@@ -26,7 +26,7 @@ const ApiKeysPage = async () => {
   const { data: apiKeys } = await svc
     .from("api_keys")
     .select("id, name, key_prefix, scopes, last_used_at, created_at, is_active")
-    .eq("organization_id", membership.organization_id)
+    .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
   return (

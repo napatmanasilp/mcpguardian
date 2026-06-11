@@ -85,23 +85,35 @@ async function runSql(sql: string): Promise<{ success: boolean; error?: string }
 async function main() {
   const migrationsDir = resolve(__dirname, "..", "supabase", "migrations");
 
-  // Explicit list of migration files in order
-  // 000_drop_old_tables.sql runs first to clean up old schema
+  // Explicit list of all migration files in order (24 total)
   const MIGRATION_FILES = [
     "000_drop_old_tables.sql",
+    "001_initial.sql",
     "001_plans.sql",
     "002_overage_rates.sql",
+    "002_seed_cves.sql",
+    "003_alert_dedup.sql",
     "003_organizations.sql",
     "004_organization_members.sql",
+    "004_rug_pull_detection.sql",
+    "005_api_keys.sql",
     "005_mcp_servers.sql",
+    "006_check_cache.sql",
+    "006_invocation_sequences.sql",
     "006_scans.sql",
+    "007_invocation_logs.sql",
     "007_proxy_sessions.sql",
+    "007_session_permissions.sql",
+    "008_forensic_content.sql",
+    "008_server_registry.sql",
     "008_tool_invocation_logs.sql",
+    "009_active_sessions.sql",
     "009_alerts_webhooks.sql",
     "010_addons_billing.sql",
     "011_compliance.sql",
     "012_observability.sql",
     "013_rls_policies.sql",
+    "014_increment_functions.sql",
   ];
 
   const newMigrations = MIGRATION_FILES.filter((f) =>
@@ -131,8 +143,7 @@ async function main() {
       console.log("❌");
       console.error(`\n     Error: ${result.error}\n`);
       failCount++;
-      // Stop on first failure so the user can fix it
-      break;
+      // Continue with remaining migrations; failed ones can be retried later
     }
   }
 
