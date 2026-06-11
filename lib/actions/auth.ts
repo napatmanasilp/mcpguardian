@@ -1,15 +1,9 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { getSiteUrl } from "@/lib/supabase/env";
-
-const getOrigin = async () => {
-  const headersList = await headers();
-  return headersList.get("origin") ?? getSiteUrl();
-};
 
 export interface AuthActionState {
   error?: string;
@@ -67,14 +61,13 @@ export const signUpWithEmail = async (
     return { error: "Password must be at least 8 characters." };
   }
 
-  const origin = await getOrigin();
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      emailRedirectTo: `${origin}/auth/callback`,
+      emailRedirectTo: `${getSiteUrl()}/auth/callback`,
     },
   });
 

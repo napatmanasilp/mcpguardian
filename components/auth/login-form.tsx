@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { signInWithEmail, type AuthActionState } from "@/lib/actions/auth";
 import { createClient } from "@/lib/supabase/client";
+import { getSiteUrl } from "@/lib/supabase/env";
 
 interface LoginFormProps {
   redirectTo: string;
@@ -35,7 +36,7 @@ export const LoginForm = ({ redirectTo }: LoginFormProps) => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        redirectTo: `${getSiteUrl()}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
       },
     });
 
