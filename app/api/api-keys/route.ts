@@ -78,7 +78,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const { error } = await ctx.supabase.from("api_keys").insert({
+  // Use service client for insert to bypass RLS (same pattern as page.tsx)
+  const { error } = await ctx.svc.from("api_keys").insert({
     user_id: ctx.user.id,
     key_hash: keyHash,
     key_prefix: keyPrefix,
@@ -87,8 +88,10 @@ export async function POST(request: Request) {
     calls_limit: limit,
   });
 
-  if (error)
-    return Response.json({ error: "Failed to create key" }, { status: 500 });
+  if (error) {
+    console.error("[api-keys] Insert error:", error);
+    return Response.json({ error: `Failed to create key: ${error.message}` }, { status: 500 });
+  }
 
   // Return full key THIS ONE TIME — never stored in plaintext
   return Response.json({ key, key_prefix: keyPrefix, name, plan, calls_limit: limit });
