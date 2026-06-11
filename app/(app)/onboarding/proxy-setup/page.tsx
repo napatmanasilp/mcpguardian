@@ -7,9 +7,9 @@ import {
   Check,
   ChevronRight,
   Copy,
+  Download,
   Eye,
   EyeOff,
-  Loader2,
   RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,14 +22,34 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { OnboardingSteps } from "@/components/onboarding/onboarding-steps";
 import { createClient } from "@/lib/supabase/client";
 import { ShieldLogo } from "@/components/auth/shield-logo";
 
 type InitStatus = "loading" | "ready" | "error" | "no_server" | "no_membership";
 
+function highlightJson(json: string): string {
+  return json
+    .replace(/"([^"]+)":/g, '<span class="text-blue-300">"$1"</span>:')
+    .replace(/: "([^"]+)"/g, ': <span class="text-emerald-300">"$1"</span>')
+    .replace(/: (true|false|null)/g, ': <span class="text-amber-400">$1</span>')
+    .replace(/: (\d+)/g, ': <span class="text-purple-300">$1</span>');
+}
+
+function downloadConfig(configStr: string) {
+  const blob = new Blob([configStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = ".mcpguardian.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ProxySetupPage() {
   const router = useRouter();
   const [copied, setCopied] = useState(false);
+  const [configCopied, setConfigCopied] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [serverId, setServerId] = useState<string | null>(null);
@@ -44,27 +64,28 @@ export default function ProxySetupPage() {
     ? window.location.origin
     : (process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
-  const proxyConfig = serverId
-    ? `{
-  "mcpServers": {
-    "my-app": {
-      "url": "${siteOrigin}/api/proxy/${serverId}",
-      "headers": {
-        "Authorization": "Bearer ${sessionToken ?? "YOUR_SESSION_TOKEN"}"
-      }
+  const getConfig = (sid: string | null, token: string | null) => {
+    if (sid && token) {
+      return JSON.stringify({
+        mcpServers: {
+          "my-app": {
+            url: `${siteOrigin}/api/proxy/${sid}`,
+            headers: { Authorization: `Bearer ${token}` },
+          },
+        },
+      }, null, 2);
     }
-  }
-}`
-    : `{
-  "mcpServers": {
-    "my-app": {
-      "url": "${siteOrigin}/api/proxy/YOUR_SERVER_ID",
-      "headers": {
-        "Authorization": "Bearer YOUR_SESSION_TOKEN"
-      }
-    }
-  }
-}`;
+    return JSON.stringify({
+      mcpServers: {
+        "my-app": {
+          url: `${siteOrigin}/api/proxy/YOUR_SERVER_ID`,
+          headers: { Authorization: "Bearer YOUR_SESSION_TOKEN" },
+        },
+      },
+    }, null, 2);
+  };
+
+  const proxyConfigStr = getConfig(serverId, sessionToken);
 
   // ── Initialize: find server + create session ──────────────────────
   const init = useCallback(async () => {
@@ -76,12 +97,10 @@ export default function ProxySetupPage() {
       const { data: { user }, error: authError } = await supabase.auth.getUser();
 
       if (authError || !user) {
-        // Not authenticated — redirect to login
         router.push("/login?redirect=/onboarding/proxy-setup");
         return;
       }
 
-      // Find org membership
       const { data: membership, error: membershipError } = await supabase
         .from("organization_members")
         .select("organization_id")
@@ -101,7 +120,6 @@ export default function ProxySetupPage() {
         return;
       }
 
-      // Find the most recently created MCP server
       const { data: server, error: serverError } = await supabase
         .from("mcp_servers")
         .select("id")
@@ -124,7 +142,6 @@ export default function ProxySetupPage() {
 
       setServerId(server.id);
 
-      // Create a proxy session
       const sessionRes = await fetch("/api/sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -136,9 +153,7 @@ export default function ProxySetupPage() {
       if (!sessionRes.ok) {
         console.error("Failed to create session:", sessionData);
         setInitStatus("error");
-        setErrorMessage(
-          sessionData?.error?.message ?? "Failed to create proxy session.",
-        );
+        setErrorMessage(sessionData?.error?.message ?? "Failed to create proxy session.");
         return;
       }
 
@@ -198,24 +213,29 @@ export default function ProxySetupPage() {
         if (pollRef.current) clearInterval(pollRef.current);
       }
     }, 180_000);
-
     return () => clearTimeout(timer);
   }, [connectionStatus]);
 
   // ── Handlers ──────────────────────────────────────────────────────
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(proxyConfig);
-    setCopied(true);
-    toast.success("Copied to clipboard");
-    setTimeout(() => setCopied(false), 2000);
-  }, [proxyConfig]);
+  const handleCopyConfig = useCallback(() => {
+    navigator.clipboard.writeText(proxyConfigStr);
+    setConfigCopied(true);
+    toast.success("Config copied to clipboard");
+    setTimeout(() => setConfigCopied(false), 2000);
+  }, [proxyConfigStr]);
+
+  const handleDownload = useCallback(() => {
+    downloadConfig(proxyConfigStr);
+    toast.success("Config file downloaded");
+  }, [proxyConfigStr]);
 
   const handleContinue = useCallback(() => {
-    router.push("/onboarding/confirmed");
-  }, [router]);
+    const param = connectionStatus === "detected" ? "connected" : "skipped";
+    router.push(`/onboarding/confirmed?proxy=${param}`);
+  }, [router, connectionStatus]);
 
   const handleSkip = useCallback(() => {
-    router.push("/onboarding/confirmed?skipped=true");
+    router.push("/onboarding/confirmed?proxy=skipped");
   }, [router]);
 
   // ── Connection status label ───────────────────────────────────────
@@ -243,8 +263,9 @@ export default function ProxySetupPage() {
   if (initStatus === "no_membership") {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
-        <Card className="w-full max-w-lg border-white/10 bg-[hsl(222,47%,6%)]">
+        <Card className="w-full max-w-lg border-white/10 bg-bg-surface">
           <CardHeader className="text-center">
+            <OnboardingSteps currentStep={2} />
             <ShieldLogo className="mx-auto mb-4" />
             <CardTitle className="text-xl">No Organization Found</CardTitle>
             <CardDescription>
@@ -264,8 +285,9 @@ export default function ProxySetupPage() {
   if (initStatus === "no_server") {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
-        <Card className="w-full max-w-lg border-white/10 bg-[hsl(222,47%,6%)]">
+        <Card className="w-full max-w-lg border-white/10 bg-bg-surface">
           <CardHeader className="text-center">
+            <OnboardingSteps currentStep={2} />
             <ShieldLogo className="mx-auto mb-4" />
             <CardTitle className="text-xl">No MCP Server Found</CardTitle>
             <CardDescription>
@@ -285,8 +307,9 @@ export default function ProxySetupPage() {
   if (initStatus === "error") {
     return (
       <div className="flex min-h-screen items-center justify-center p-6">
-        <Card className="w-full max-w-lg border-white/10 bg-[hsl(222,47%,6%)]">
+        <Card className="w-full max-w-lg border-white/10 bg-bg-surface">
           <CardHeader className="text-center">
+            <OnboardingSteps currentStep={2} />
             <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-red-500/20">
               <AlertCircle className="size-6 text-red-400" />
             </div>
@@ -307,8 +330,9 @@ export default function ProxySetupPage() {
   // ── Main Render ───────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
-      <Card className="w-full max-w-2xl border-white/10 bg-[hsl(222,47%,6%)]">
+      <Card className="w-full max-w-2xl border-white/10" style={{ background: "var(--bg-surface)" }}>
         <CardHeader className="text-center">
+          <OnboardingSteps currentStep={2} />
           <div className="mx-auto mb-4">
             <ShieldLogo className="size-12" />
           </div>
@@ -344,57 +368,66 @@ export default function ProxySetupPage() {
             </div>
           </div>
 
-          {/* Code block */}
+          {/* Config block with syntax highlighting */}
           <div className="space-y-2">
-            <Label>MCP client configuration</Label>
+            <p className="text-sm font-medium text-slate-300">MCP client configuration</p>
             <div className="relative rounded-lg border border-white/10 bg-black/50 p-4">
-              <pre className="text-xs text-slate-300 overflow-x-auto whitespace-pre-wrap font-mono">
-                {proxyConfig}
-              </pre>
-              {serverId && sessionToken && (
-                <div className="absolute top-2 right-2 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowToken(!showToken)}
-                    className="rounded p-1.5 text-slate-500 hover:bg-white/5 hover:text-slate-300 transition-colors"
-                    title={showToken ? "Hide token" : "Show token"}
-                  >
-                    {showToken ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCopy}
-                    className="rounded p-1.5 text-slate-500 hover:bg-white/5 hover:text-slate-300 transition-colors"
-                    title="Copy to clipboard"
-                  >
-                    {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5" />}
-                  </button>
-                </div>
-              )}
+              <pre
+                className="font-mono text-xs leading-relaxed overflow-x-scroll scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20"
+                dangerouslySetInnerHTML={{ __html: highlightJson(proxyConfigStr) }}
+              />
             </div>
+            {/* Copy + Download buttons */}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCopyConfig}
+                className="flex-1 gap-2 border-white/10"
+              >
+                <Copy className="size-3.5" />
+                {configCopied ? "Copied!" : "Copy Config"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownload}
+                className="flex-1 gap-2 border-white/10"
+              >
+                <Download className="size-3.5" />
+                Download .json
+              </Button>
+            </div>
+            {/* Token show/hide */}
+            {serverId && sessionToken && (
+              <button
+                type="button"
+                onClick={() => setShowToken(!showToken)}
+                className="text-xs text-slate-500 hover:text-slate-300 flex items-center gap-1 mt-1"
+              >
+                {showToken ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
+                {showToken ? "Hide token" : "Show token"}
+              </button>
+            )}
           </div>
 
           {/* Status indicator */}
           <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-center">
             {statusVariant === "loading" && (
               <div className="flex items-center justify-center gap-3">
-                <Loader2 className="size-5 animate-spin text-blue-400" />
-                <div>
-                  <p className="text-sm font-medium text-slate-200">{statusMessage}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    This should only take a moment
-                  </p>
+                <div className="shimmer size-8 rounded-full shrink-0" />
+                <div className="space-y-1.5">
+                  <div className="h-4 w-48 rounded shimmer" />
+                  <div className="h-3 w-32 rounded shimmer" />
                 </div>
               </div>
             )}
             {statusVariant === "waiting" && (
               <div className="flex items-center justify-center gap-3">
-                <Loader2 className="size-5 animate-spin text-blue-400" />
-                <div>
-                  <p className="text-sm font-medium text-slate-200">{statusMessage}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Configure your MCP client with the config above
-                  </p>
+                <div className="shimmer size-8 rounded-full shrink-0" />
+                <div className="space-y-1.5">
+                  <div className="h-4 w-48 rounded shimmer" />
+                  <div className="h-3 w-32 rounded shimmer" />
                 </div>
               </div>
             )}
@@ -447,8 +480,4 @@ export default function ProxySetupPage() {
       </Card>
     </div>
   );
-}
-
-function Label({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm font-medium text-slate-300">{children}</p>;
 }

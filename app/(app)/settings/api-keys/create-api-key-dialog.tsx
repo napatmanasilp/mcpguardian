@@ -27,6 +27,7 @@ export function CreateApiKeyDialog() {
   const [createdKey, setCreatedKey] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
   const [copied, setCopied] = useState(false);
+  const [hasConfirmed, setHasConfirmed] = useState(false);
 
   const handleCreate = useCallback(async () => {
     const trimmed = name.trim();
@@ -66,18 +67,18 @@ export function CreateApiKeyDialog() {
     navigator.clipboard.writeText(createdKey);
     setCopied(true);
     toast.success("Copied to clipboard");
-    setTimeout(() => setCopied(false), 2000);
+    setTimeout(() => setCopied(false), 3000);
   }, [createdKey]);
 
   const handleOpenChange = useCallback((newOpen: boolean) => {
     if (!newOpen) {
-      // Reset state when dialog closes
       setTimeout(() => {
         setName("");
         setStep("form");
         setCreatedKey(null);
         setErrorMessage("");
         setCopied(false);
+        setHasConfirmed(false);
       }, 200);
     }
     setOpen(newOpen);
@@ -96,7 +97,7 @@ export function CreateApiKeyDialog() {
           Create Key
         </Button>
       </DialogTrigger>
-      <DialogContent className="border-white/10 bg-[hsl(222,47%,6%)] sm:max-w-md">
+      <DialogContent className="border-white/10 bg-bg-base sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-slate-200">
             {step === "created" ? "API Key Created" : "Create API Key"}
@@ -151,29 +152,34 @@ export function CreateApiKeyDialog() {
         {/* ── Created step ───────────────────────────── */}
         {step === "created" && createdKey && (
           <div className="space-y-4">
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/8 p-3">
-              <p className="text-xs text-emerald-400 font-semibold mb-1">
-                ⚠ Save this key — it will not be shown again
+            <div className="rounded-lg border border-amber-400/40 bg-amber-400/5 p-3">
+              <p className="text-xs text-amber-400 font-semibold mb-2">
+                ⚠ Copy this key now — it will never be shown again
               </p>
               <div className="relative">
-                <pre className="text-xs text-slate-200 font-mono bg-black/50 rounded-md p-3 pr-10 overflow-x-auto break-all select-all">
+                <pre className="text-xs text-slate-200 font-mono bg-black/50 rounded-md p-3 overflow-x-scroll break-all select-all scrollbar-thin scrollbar-track-white/5 scrollbar-thumb-white/20">
                   {createdKey}
                 </pre>
-                <button
-                  type="button"
-                  onClick={handleCopy}
-                  className="absolute top-2 right-2 rounded p-1.5 text-slate-500 hover:bg-white/5 hover:text-slate-300 transition-colors"
-                  title="Copy to clipboard"
-                >
-                  {copied ? (
-                    <Check className="size-3.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="size-3.5" />
-                  )}
-                </button>
               </div>
+              {/* Large prominent copy button */}
+              <Button onClick={handleCopy} className="w-full mt-3 gap-2" variant="outline">
+                <Copy className="size-4" />
+                {copied ? "Copied!" : "Copy API Key"}
+              </Button>
+              {/* Confirmation checkbox */}
+              <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hasConfirmed}
+                  onChange={(e) => setHasConfirmed(e.target.checked)}
+                  className="rounded border-white/20 bg-white/5 accent-blue-500"
+                />
+                <span className="text-sm text-white/60">
+                  I have saved this key in a secure location
+                </span>
+              </label>
             </div>
-            <Button className="w-full" onClick={handleDone}>
+            <Button className="w-full" onClick={handleDone} disabled={!copied && !hasConfirmed}>
               Done
             </Button>
           </div>

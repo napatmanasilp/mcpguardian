@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Bolt, ChevronUp, Zap } from "lucide-react";
 import Link from "next/link";
 
@@ -18,6 +18,11 @@ import { cn } from "@/lib/utils";
 export const UsageSidebarWidget = () => {
   const { usage, loading } = useUsage();
   const [collapsed, setCollapsed] = useState(false);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    requestAnimationFrame(() => setMounted(true));
+  }, []);
 
   if (loading || !usage) return null;
 
@@ -62,15 +67,15 @@ export const UsageSidebarWidget = () => {
 
       {!collapsed && (
         <div className="mt-1.5 rounded-md bg-muted/30 px-3 py-2">
-          {/* Progress bar */}
+          {/* Progress bar with mount animation */}
           <div className="mb-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
             <div
               className={cn(
-                "h-full rounded-full transition-all duration-500",
+                "h-full rounded-full transition-all duration-500 ease-out",
                 barColor,
                 percent >= 100 && "animate-pulse",
               )}
-              style={{ width: `${Math.min(percent, 100)}%` }}
+              style={{ width: mounted ? `${Math.min(percent, 100)}%` : "0%" }}
             />
           </div>
 

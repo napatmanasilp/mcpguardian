@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, Plus, Search, Server, Shield, Terminal } from "lucide-react";
+import { ArrowRight, LayoutGrid, List, Plus, Search, Server } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,10 +10,21 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
 
+function timeAgo(dateStr: string | null): string {
+  if (!dateStr) return "Never";
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
 const ServersPage = async ({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ q?: string; view?: string }>;
 }) => {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -31,6 +42,7 @@ const ServersPage = async ({
 
   const params = await searchParams;
   const query = params.q?.toLowerCase() ?? "";
+  const currentView = params.view ?? "list";
 
   let queryBuilder = svc
     .from("mcp_servers")
@@ -60,81 +72,162 @@ const ServersPage = async ({
         </Link>
       </div>
 
-      {/* Search */}
-      <form className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
-        <Input
-          name="q"
-          placeholder="Search servers..."
-          defaultValue={query}
-          className="pl-9 border-white/10 bg-white/5 w-full max-w-md"
-        />
-      </form>
-
-      {/* Server Grid */}
-      {servers && servers.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {servers.map((server) => {
-            const scanColor =
-              server.last_scan_result === "clean"
-                ? "text-emerald-400"
-                : server.last_scan_result === "suspicious"
-                  ? "text-amber-400"
-                  : server.last_scan_result === "malicious"
-                    ? "text-red-400"
-                    : "text-slate-500";
-
-            const statusColor =
-              server.allowlist_status === "approved"
-                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
-                : server.allowlist_status === "blocked"
-                  ? "bg-red-500/20 text-red-400 border-red-500/30"
-                  : "bg-amber-500/20 text-amber-400 border-amber-500/30";
-
-            return (
-              <Link key={server.id} href={`/servers/${server.id}`}>
-                <Card className="border-white/10 bg-[hsl(222,47%,6%)] hover:bg-[hsl(222,47%,8%)] transition-colors cursor-pointer">
-                  <CardContent className="p-5 space-y-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-200 truncate flex items-center gap-2">
-                          {server.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
-                          {server.endpoint_url ?? server.name}
-                        </p>
-                      </div>
-                      <Badge
-                        variant={server.transport_type === "http" ? "default" : "secondary"}
-                        className="text-[10px] shrink-0"
-                      >
-                        {server.transport_type === "http" ? "HTTP" : <><Terminal className="size-2.5 mr-1" /> STDIO</>}
-                      </Badge>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="outline" className={cn("text-[10px]", statusColor)}>
-                        {server.allowlist_status}
-                      </Badge>
-                      {server.risk_score != null && (
-                        <span className={cn("text-xs font-mono", scanColor)}>
-                          Score: {server.risk_score}/100
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] text-slate-500">
-                      <span>
-                        Added {new Date(server.created_at).toLocaleDateString()}
-                      </span>
-                      <ArrowRight className="size-3" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
+      {/* Search + View Toggle */}
+      <div className="flex items-center gap-3">
+        <form className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
+          <Input
+            name="q"
+            placeholder="Search servers..."
+            defaultValue={query}
+            className="pl-9 border-white/10 bg-white/5 w-full"
+          />
+        </form>
+        {/* Grid/List toggle — hidden on mobile */}
+        <div className="hidden sm:flex items-center gap-1 border border-white/10 rounded-lg p-1">
+          <Link
+            href="?view=list"
+            className={cn("p-1.5 rounded transition-colors", currentView === "list" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60")}
+          >
+            <List className="size-4" />
+          </Link>
+          <Link
+            href="?view=grid"
+            className={cn("p-1.5 rounded transition-colors", currentView === "grid" ? "bg-white/10 text-white" : "text-white/40 hover:text-white/60")}
+          >
+            <LayoutGrid className="size-4" />
+          </Link>
         </div>
+      </div>
+
+      {/* Server List/Grid */}
+      {servers && servers.length > 0 ? (
+        currentView === "list" ? (
+          /* ── List View ── */
+          <div className="flex flex-col gap-2">
+            {servers.map((server) => {
+              const statusColor =
+                server.allowlist_status === "approved"
+                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                  : server.allowlist_status === "blocked"
+                    ? "bg-red-500/20 text-red-400 border-red-500/30"
+                    : "bg-amber-500/20 text-amber-400 border-amber-500/30";
+
+              return (
+                <Link key={server.id} href={`/servers/${server.id}`}>
+                  <Card className="border-white/10 bg-bg-surface hover:bg-bg-elevated transition-all duration-150 hover:-translate-y-px hover:border-white/20 cursor-pointer">
+                    <CardContent className="p-4">
+                      <div className="flex items-center gap-3">
+                        {/* Status dot */}
+                        <span className={cn("size-2 rounded-full shrink-0", server.allowlist_status === "approved" ? "bg-emerald-400" : server.allowlist_status === "blocked" ? "bg-red-400" : "bg-amber-400")} />
+                        {/* Name + badges */}
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-200 truncate">{server.name}</p>
+                          <Badge variant={server.transport_type === "http" ? "default" : "secondary"} className="text-[10px] shrink-0">
+                            {server.transport_type === "http" ? "HTTP" : "STDIO"}
+                          </Badge>
+                          <Badge variant="outline" className={cn("text-[10px] shrink-0", statusColor)}>
+                            {server.allowlist_status}
+                          </Badge>
+                        </div>
+                        {/* 4 inline stats */}
+                        <div className="hidden sm:flex items-center gap-4 text-xs font-mono text-slate-400">
+                          <span>Risk: {server.risk_score ?? "—"}/100</span>
+                          <span>Latency: —ms</span>
+                          <span>Sessions: 0</span>
+                          <span>Scan: {timeAgo(server.last_scan_result ? server.created_at : null)}</span>
+                        </div>
+                        <ArrowRight className="size-3.5 text-slate-500 shrink-0" />
+                      </div>
+                      {/* Risk bar */}
+                      {server.risk_score != null && (
+                        <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/5">
+                          <div
+                            className={cn("h-full rounded-full transition-all duration-500", server.risk_score >= 80 ? "bg-secure" : server.risk_score >= 60 ? "bg-caution" : "bg-threat")}
+                            style={{ width: `${server.risk_score}%` }}
+                          />
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        ) : (
+          /* ── Grid View ── */
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {servers.map((server) => {
+              const statusColor =
+                server.allowlist_status === "approved"
+                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                  : server.allowlist_status === "blocked"
+                    ? "bg-red-500/20 text-red-400 border-red-500/30"
+                    : "bg-amber-500/20 text-amber-400 border-amber-500/30";
+
+              return (
+                <Link key={server.id} href={`/servers/${server.id}`}>
+                  <Card className="border-white/10 bg-bg-surface hover:bg-bg-elevated transition-all duration-150 hover:-translate-y-px hover:border-white/20 cursor-pointer">
+                    <CardContent className="p-5 space-y-4">
+                      {/* Row 1: status dot + name + transport badge */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-slate-200 truncate flex items-center gap-2">
+                            <span className={cn("size-2 rounded-full shrink-0", server.allowlist_status === "approved" ? "bg-emerald-400" : server.allowlist_status === "blocked" ? "bg-red-400" : "bg-amber-400")} />
+                            {server.name}
+                          </p>
+                          <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
+                            {server.endpoint_url ?? server.name}
+                          </p>
+                        </div>
+                        <Badge variant={server.transport_type === "http" ? "default" : "secondary"} className="text-[10px] shrink-0">
+                          {server.transport_type === "http" ? "HTTP" : "STDIO"}
+                        </Badge>
+                      </div>
+
+                      {/* Row 2: 4 inline stats */}
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">Risk</p>
+                          <p className={cn(server.risk_score != null && (server.risk_score >= 80 ? "text-secure" : server.risk_score >= 60 ? "text-caution" : "text-threat"))}>
+                            {server.risk_score ?? "—"}/100
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">Latency</p>
+                          <p>—ms</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">Sessions</p>
+                          <p>0</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] text-slate-500 uppercase tracking-wider">Last Scan</p>
+                          <p>{timeAgo(server.last_scan_result ? server.created_at : null)}</p>
+                        </div>
+                      </div>
+
+                      {/* Row 3: allowlist badge + risk bar */}
+                      <div className="space-y-2">
+                        <Badge variant="outline" className={cn("text-[10px]", statusColor)}>
+                          {server.allowlist_status}
+                        </Badge>
+                        {server.risk_score != null && (
+                          <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
+                            <div
+                              className={cn("h-full rounded-full transition-all duration-500", server.risk_score >= 80 ? "bg-secure" : server.risk_score >= 60 ? "bg-caution" : "bg-threat")}
+                              style={{ width: `${server.risk_score}%` }}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+        )
       ) : (
         <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
           <Server className="size-12 text-slate-600 mb-4" />

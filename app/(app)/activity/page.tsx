@@ -73,10 +73,10 @@ const ActivityPage = async () => {
             <div
               key={`${event.type}-${event.id}`}
               className={cn(
-                "flex items-start gap-3 rounded-lg border px-4 py-3",
-                event.severity === "critical" ? "border-red-500/20 bg-red-500/5" :
-                event.severity === "high" ? "border-amber-500/20 bg-amber-500/5" :
-                "border-white/10 bg-white/5",
+                "flex items-start gap-3 rounded-lg border px-4 py-3 transition-all duration-150 hover:-translate-y-px",
+                event.severity === "critical" ? "border-red-500/20 bg-red-500/5 hover:bg-red-500/8" :
+                event.severity === "high" ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/8" :
+                "border-white/10 bg-white/5 hover:bg-white/[0.07]",
               )}
             >
               <div className={cn(

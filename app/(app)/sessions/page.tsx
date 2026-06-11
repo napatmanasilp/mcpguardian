@@ -41,7 +41,7 @@ const SessionsPage = async () => {
         <div className="space-y-2">
           {sessions.map((session) => (
             <Link key={session.id} href={`/sessions/${session.id}`}>
-              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition-colors">
+              <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 hover:-translate-y-px transition-all duration-150 cursor-pointer">
                 <div className="flex items-center gap-4 min-w-0">
                   <Badge
                     className={cn(
