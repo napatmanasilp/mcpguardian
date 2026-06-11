@@ -1,14 +1,12 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Copy, Key, Plus, Trash2 } from "lucide-react";
+import { Key, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
+import { CreateApiKeyDialog } from "./create-api-key-dialog";
 
 const ApiKeysPage = async () => {
   const supabase = await createClient();
@@ -46,10 +44,7 @@ const ApiKeysPage = async () => {
               Manage API keys for programmatic access to MCPGuardian.
             </CardDescription>
           </div>
-          <Button size="sm" className="gap-1.5">
-            <Plus className="size-3.5" />
-            Create Key
-          </Button>
+          <CreateApiKeyDialog />
         </CardHeader>
         <CardContent className="space-y-2">
           {apiKeys && apiKeys.length > 0 ? (
