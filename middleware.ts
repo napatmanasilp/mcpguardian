@@ -66,31 +66,11 @@ export const middleware = async (request: NextRequest) => {
     return NextResponse.redirect(loginUrl);
   }
 
-  // ── Org membership check (skip for onboarding itself) ──────────
-  if (user && pathname !== "/onboarding" && !pathname.startsWith("/onboarding/")) {
-    const isDashboardOrApp = [
-      "/dashboard", "/servers", "/sessions", "/activity",
-      "/alerts", "/compliance", "/settings", "/telemetry",
-    ].some((route) => pathname === route || pathname.startsWith(`${route}/`));
-
-    if (isDashboardOrApp) {
-      try {
-        const { data: membership } = await supabase
-          .from("organization_members")
-          .select("id")
-          .eq("user_id", user.id)
-          .limit(1)
-          .maybeSingle();
-
-        if (!membership) {
-          return NextResponse.redirect(new URL("/onboarding", request.url));
-        }
-      } catch {
-        // If the membership check fails, allow the request through
-        // (enforced by API routes and pages)
-      }
-    }
-  }
+  // Note: Org membership check is NOT performed in middleware.
+  // Server-side components (dashboard layout/page) handle this with
+  // the service client (bypasses RLS) and redirect to /onboarding.
+  // Performing this check here with the anon-key client can fail due
+  // to RLS policies, causing redirect loops back to /onboarding.
 
   return supabaseResponse;
 };
