@@ -17,32 +17,47 @@ const protectedRoutes = [
   "/onboarding",
 ];
 
-// Extract Supabase project ref from the URL env var (set at build time)
-const SUPABASE_PROJECT_REF = (getSupabaseUrl()
-  .match(/https:\/\/(.+)\.supabase\.co/)?.[1] ?? "");
-
 export const middleware = async (request: NextRequest) => {
   const supabaseResponse = NextResponse.next({ request });
-
-  // ── Authenticate via cookie ─────────────────────────────────────
-  let user: { id: string } | null = null;
-  const authCookieName = `sb-${SUPABASE_PROJECT_REF}-auth-token`;
-  const authCookie = request.cookies.get(authCookieName);
-  if (authCookie?.value) {
-    try {
-      const parsed = JSON.parse(authCookie.value);
-      if (parsed?.user?.id) {
-        user = { id: parsed.user.id };
-      }
-    } catch {
-      // Invalid cookie — not authenticated
-    }
-  }
 
   const { pathname } = request.nextUrl;
   const isProtected = protectedRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
+
+  // ── Authenticate via Supabase SSR client ─────────────────────────
+  // Use the standard Supabase server client instead of manually parsing
+  // the auth cookie. This ensures accurate auth state by actually
+  // verifying the session with the Supabase API (refreshing it if
+  // needed), preventing redirect loops when cookie state and actual
+  // Supabase session state diverge (e.g. stale/expired JWTs).
+  const supabase = createServerClient(
+    getSupabaseUrl(),
+    getSupabaseAnonKey(),
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            supabaseResponse.cookies.set(name, value, options);
+          });
+        },
+      },
+    },
+  );
+
+  let user: { id: string } | null = null;
+  try {
+    const {
+      data: { user: u },
+    } = await supabase.auth.getUser();
+    if (u) user = { id: u.id };
+  } catch {
+    // Supabase API unreachable or session invalid — treat as unauthenticated
+  }
 
   // Redirect unauthenticated users to login
   if (isProtected && !user) {
@@ -60,25 +75,7 @@ export const middleware = async (request: NextRequest) => {
 
     if (isDashboardOrApp) {
       try {
-        const svc = createServerClient(
-          getSupabaseUrl(),
-          getSupabaseAnonKey(),
-          {
-            cookies: {
-              getAll() {
-                return request.cookies.getAll();
-              },
-              setAll(cookiesToSet) {
-                cookiesToSet.forEach(({ name, value, options }) => {
-                  request.cookies.set(name, value);
-                  supabaseResponse.cookies.set(name, value, options);
-                });
-              },
-            },
-          },
-        );
-
-        const { data: membership } = await svc
+        const { data: membership } = await supabase
           .from("organization_members")
           .select("id")
           .eq("user_id", user.id)
