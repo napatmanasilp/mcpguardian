@@ -52,11 +52,11 @@ function extractTopIssue(results: unknown): { severity: string; type: string } |
 }
 
 const gradeBadgeStyles = (grade: string) => {
-  if (grade === "A") return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
-  if (grade === "B") return "bg-blue-500/20 text-blue-400 border-blue-500/30";
-  if (grade === "C") return "bg-amber-500/20 text-amber-400 border-amber-500/30";
-  if (grade === "D") return "bg-orange-500/20 text-orange-400 border-orange-500/30";
-  return "bg-red-500/20 text-red-400 border-red-500/30";
+  if (grade === "A") return "bg-secure/20 text-secure border-secure/30";
+  if (grade === "B") return "bg-monitor/20 text-monitor border-monitor/30";
+  if (grade === "C") return "bg-caution/20 text-caution border-caution/30";
+  if (grade === "D") return "bg-caution/20 text-caution border-caution/30";
+  return "bg-threat/20 text-threat border-threat/30";
 };
 
 // ─── Component ─────────────────────────────────────────────────────────

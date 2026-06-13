@@ -1,14 +1,22 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, LayoutGrid, List, Plus, Search, Server } from "lucide-react";
+import { ArrowRight, LayoutGrid, List, Plus, Search } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Servers — MCPGuardian",
+  description: "Manage your registered MCP servers, view risk scores, and trigger rescans.",
+};
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { RescanButtonWithRefresh } from "@/components/servers/rescan-button-with-refresh";
-import { createClient } from "@/lib/supabase/server";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
+import { EMPTY_STATES } from "@/lib/ui/empty-states";
 import { cn } from "@/lib/utils";
 
 function timeAgo(dateStr: string | null): string {
@@ -27,19 +35,10 @@ const ServersPage = async ({
 }: {
   searchParams: Promise<{ q?: string; view?: string }>;
 }) => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const org = await getOrgContext();
+  if (!org) redirect("/onboarding");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
-
-  if (!membership) redirect("/onboarding");
 
   const params = await searchParams;
   const query = params.q?.toLowerCase() ?? "";
@@ -48,14 +47,18 @@ const ServersPage = async ({
   let queryBuilder = svc
     .from("mcp_servers")
     .select("id, name, transport_type, endpoint_url, allowlist_status, last_scan_result, last_scan_at, risk_score, created_at")
-    .eq("organization_id", membership.organization_id)
+    .eq("organization_id", org.organizationId)
     .order("created_at", { ascending: false });
 
   if (query) {
     queryBuilder = queryBuilder.ilike("name", `%${query}%`);
   }
 
-  const { data: servers } = await queryBuilder;
+  const { data: servers, error: queryError } = await queryBuilder;
+
+  if (queryError) {
+    throw new Error("Failed to load server data. Please try again.");
+  }
 
   // Fetch latest latency + active session count per server in parallel
   const serverIds = servers?.map((s) => s.id) ?? [];
@@ -66,7 +69,7 @@ const ServersPage = async ({
           .select("mcp_server_id, latency_ms")
           .in("mcp_server_id", serverIds)
           .order("recorded_at", { ascending: false })
-          .limit(serverIds.length * 5) // up to 5 recent readings per server
+          .limit(serverIds.length * 5)
       : Promise.resolve({ data: [] }),
     serverIds.length > 0
       ? svc
@@ -90,24 +93,25 @@ const ServersPage = async ({
   }
 
   return (
-    <main className="flex flex-1 flex-col gap-6 p-6">
+    <main className="flex flex-1 flex-col gap-6 p-4 md:p-6 overflow-x-hidden">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Servers</p>
           <h1 className="text-2xl font-bold tracking-tight">MCP Servers</h1>
         </div>
         <Link href="/servers/new">
           <Button className="gap-2 shrink-0">
             <Plus className="size-4" />
-            Add Server
+            <span className="hidden sm:inline">Add Server</span>
+            <span className="sm:hidden">Add</span>
           </Button>
         </Link>
       </div>
 
       {/* Search + View Toggle */}
       <div className="flex items-center gap-3">
-        <form className="relative flex-1 max-w-md">
+        <form className="relative flex-1 min-w-0 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-500" />
           <Input
             name="q"
@@ -141,18 +145,19 @@ const ServersPage = async ({
             {servers.map((server) => {
               const statusColor =
                 server.allowlist_status === "approved"
-                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                  ? "bg-secure/20 text-secure border-secure/30"
                   : server.allowlist_status === "blocked"
-                    ? "bg-red-500/20 text-red-400 border-red-500/30"
-                    : "bg-amber-500/20 text-amber-400 border-amber-500/30";
+                    ? "bg-threat/20 text-threat border-threat/30"
+                    : "bg-caution/20 text-caution border-caution/30";
 
               return (
                 <Link key={server.id} href={`/servers/${server.id}`}>
                   <Card className="border-white/10 bg-bg-surface hover:bg-bg-elevated transition-all duration-150 hover:-translate-y-px hover:border-white/20 cursor-pointer">
-                    <CardContent className="p-4">
-                      <div className="flex items-center gap-3">
+                    <CardContent className="p-3 md:p-4">
+                      {/* Desktop: single row layout */}
+                      <div className="hidden md:flex items-center gap-3">
                         {/* Status dot */}
-                        <span className={cn("size-2 rounded-full shrink-0", server.allowlist_status === "approved" ? "bg-emerald-400" : server.allowlist_status === "blocked" ? "bg-red-400" : "bg-amber-400")} />
+                        <span className={cn("size-2 rounded-full shrink-0", server.allowlist_status === "approved" ? "bg-secure" : server.allowlist_status === "blocked" ? "bg-threat" : "bg-caution")} />
                         {/* Name + badges */}
                         <div className="flex items-center gap-2 min-w-0 flex-1">
                           <p className="text-sm font-semibold text-slate-200 truncate">{server.name}</p>
@@ -164,7 +169,7 @@ const ServersPage = async ({
                           </Badge>
                         </div>
                         {/* 4 inline stats */}
-                        <div className="hidden sm:flex items-center gap-4 text-xs font-mono text-slate-400">
+                        <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
                           <span>Risk: {server.risk_score ?? "—"}/100</span>
                           <span>Latency: {latencyByServer[server.id] != null ? `${latencyByServer[server.id]}ms` : "—"}</span>
                           <span>Sessions: {sessionCountByServer[server.id] ?? 0}</span>
@@ -173,7 +178,34 @@ const ServersPage = async ({
                         <RescanButtonWithRefresh serverId={server.id} />
                         <ArrowRight className="size-3.5 text-slate-500 shrink-0" />
                       </div>
-                      {/* Risk bar */}
+
+                      {/* Mobile: stacked card layout */}
+                      <div className="md:hidden space-y-2">
+                        {/* Row 1: dot + name + badges */}
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={cn("size-2 rounded-full shrink-0", server.allowlist_status === "approved" ? "bg-secure" : server.allowlist_status === "blocked" ? "bg-threat" : "bg-caution")} />
+                          <p className="text-sm font-semibold text-slate-200 truncate flex-1">{server.name}</p>
+                          <Badge variant={server.transport_type === "http" ? "default" : "secondary"} className="text-[10px] shrink-0">
+                            {server.transport_type === "http" ? "HTTP" : "STDIO"}
+                          </Badge>
+                        </div>
+                        {/* Row 2: stats grid */}
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono text-slate-400 pl-4">
+                          <span>Risk: {server.risk_score ?? "—"}/100</span>
+                          <span>Scan: {timeAgo(server.last_scan_at ?? null)}</span>
+                          <span>Latency: {latencyByServer[server.id] != null ? `${latencyByServer[server.id]}ms` : "—"}</span>
+                          <span>Sessions: {sessionCountByServer[server.id] ?? 0}</span>
+                        </div>
+                        {/* Row 3: status badge + rescan */}
+                        <div className="flex items-center justify-between pl-4">
+                          <Badge variant="outline" className={cn("text-[10px]", statusColor)}>
+                            {server.allowlist_status}
+                          </Badge>
+                          <RescanButtonWithRefresh serverId={server.id} />
+                        </div>
+                      </div>
+
+                      {/* Risk bar (both mobile and desktop) */}
                       {server.risk_score != null && (
                         <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/5">
                           <div
@@ -190,14 +222,14 @@ const ServersPage = async ({
           </div>
         ) : (
           /* ── Grid View ── */
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             {servers.map((server) => {
               const statusColor =
                 server.allowlist_status === "approved"
-                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30"
+                  ? "bg-secure/20 text-secure border-secure/30"
                   : server.allowlist_status === "blocked"
-                    ? "bg-red-500/20 text-red-400 border-red-500/30"
-                    : "bg-amber-500/20 text-amber-400 border-amber-500/30";
+                    ? "bg-threat/20 text-threat border-threat/30"
+                    : "bg-caution/20 text-caution border-caution/30";
 
               return (
                 <Link key={server.id} href={`/servers/${server.id}`}>
@@ -207,7 +239,7 @@ const ServersPage = async ({
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold text-slate-200 truncate flex items-center gap-2">
-                            <span className={cn("size-2 rounded-full shrink-0", server.allowlist_status === "approved" ? "bg-emerald-400" : server.allowlist_status === "blocked" ? "bg-red-400" : "bg-amber-400")} />
+                            <span className={cn("size-2 rounded-full shrink-0", server.allowlist_status === "approved" ? "bg-secure" : server.allowlist_status === "blocked" ? "bg-threat" : "bg-caution")} />
                             {server.name}
                           </p>
                           <p className="text-[10px] text-slate-500 font-mono mt-0.5 truncate">
@@ -266,17 +298,7 @@ const ServersPage = async ({
           </div>
         )
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center py-16 text-center">
-          <Server className="size-12 text-slate-600 mb-4" />
-          <h2 className="text-lg font-semibold text-slate-300 mb-1">No servers registered</h2>
-          <p className="text-sm text-slate-500 mb-6">Add your first MCP server to begin scanning.</p>
-          <Link href="/servers/new">
-            <Button className="gap-2">
-              <Plus className="size-4" />
-              Add Server
-            </Button>
-          </Link>
-        </div>
+        <EmptyState {...EMPTY_STATES["servers"]} />
       )}
     </main>
   );

@@ -1,14 +1,26 @@
 import { ArrowLeft, RotateCcw } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { notFound, redirect } from "next/navigation";
 
-import { ScanResults } from "@/components/scan-results";
 import { SecurityGradeBadge } from "@/components/security-grade-badge";
 import { ExportReportButton } from "@/components/reports/export-report-button";
 import { Button } from "@/components/ui/button";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { createClient } from "@/lib/supabase/server";
 import type { ScanResult } from "@/lib/scanner/types";
 import type { SecurityGrade } from "@/lib/security-grade";
+
+// Code-split: ScanResults is a very large client component (500+ lines).
+// Requirement 20.1: code-split client components > 50 KB not needed on initial render
+const ScanResults = dynamic(
+  () => import("@/components/scan-results").then((mod) => mod.ScanResults),
+  {
+    loading: () => (
+      <PageSkeleton blocks={[{ type: "chart", height: "16rem" }, { type: "table", height: "12rem" }]} />
+    ),
+  },
+);
 
 // ─── Types ─────────────────────────────────────────────────────────────
 

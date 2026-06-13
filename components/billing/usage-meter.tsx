@@ -31,10 +31,10 @@ export function UsageMeter({
   // Determine bar color based on thresholds
   const barColor =
     isUnlimited || ratio < warningThreshold
-      ? "bg-blue-500"
+      ? "bg-monitor"
       : ratio < 1
-        ? "bg-amber-500"
-        : "bg-red-500";
+        ? "bg-caution"
+        : "bg-threat";
 
   return (
     <div className="space-y-1.5">

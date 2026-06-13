@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
@@ -5,25 +6,32 @@ import {
   ArrowRight,
   CheckCircle2,
   CloudOff,
-  FileText,
   ScanSearch,
   Server,
   Shield,
   ShieldCheck,
-  X,
 } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Dashboard — MCPGuardian",
+  description: "Overview of your MCP server security posture, usage metrics, and active threats.",
+};
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Progress } from "@/components/ui/progress";
 import { ThreatFeedSection } from "@/components/dashboard/threat-feed-section";
 import { WelcomeCard } from "@/components/dashboard/welcome-card";
 import { QuickActionsBar } from "@/components/dashboard/quick-actions-bar";
 import { NSAComplianceTeaser } from "@/components/dashboard/nsa-compliance-teaser";
-import { createClient } from "@/lib/supabase/server";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
+import { TIER_CATALOG, type TierId, isUnlimited } from "@/lib/tier-catalog";
+import { EMPTY_STATES } from "@/lib/ui/empty-states";
 import { cn } from "@/lib/utils";
+import { isWarningThreshold } from "@/lib/utils/usage";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -48,32 +56,25 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function threatColor(type: string | null, blocked: boolean): string {
-  if (blocked) return "border-l-red-500/60 bg-red-500/5";
-  if (type) return "border-l-amber-400/60 bg-amber-500/5";
-  return "border-l-emerald-500/60 bg-emerald-500/5";
+/** Returns the start of today in UTC as an ISO string */
+function todayStartUtc(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
 }
 
 // ─── Page Component ─────────────────────────────────────────────────────
 
-const DashboardPage = async () => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+export default async function DashboardPage() {
+  const orgContext = await getOrgContext();
+  if (!orgContext) redirect("/onboarding");
 
+  const { organizationId: orgId, plan } = orgContext;
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
 
-  if (!membership) redirect("/onboarding");
+  // Resolve tier allowances
+  const tier = TIER_CATALOG[plan as TierId] ?? TIER_CATALOG.free;
 
-  // This is a safety guard — middleware should already catch this,
-  // but server-rendered pages need the type narrowing for TypeScript
-  const orgId = membership!.organization_id;
+  const todayStart = todayStartUtc();
 
   const [
     { data: org },
@@ -86,42 +87,120 @@ const DashboardPage = async () => {
     { count: blockedToday },
     { data: latencyData },
   ] = await Promise.all([
-    svc.from("organizations").select("name, plan_id, scans_used_this_period, tool_calls_used_this_period, proxy_first_connected_at, current_period_start, current_period_end, scan_limit, tool_call_limit").eq("id", orgId).single(),
-    svc.from("mcp_servers").select("id, name, transport_type, allowlist_status, last_scan_result, risk_score").eq("organization_id", orgId).order("created_at", { ascending: false }),
-    svc.from("alerts").select("*", { count: "exact", head: true }).eq("organization_id", orgId).eq("read", false),
-    svc.from("scans").select("overall_score, created_at").eq("organization_id", orgId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-    svc.from("tool_invocation_logs").select("id, tool_name, was_blocked, threat_type, created_at, mcp_server_id").eq("organization_id", orgId).not("threat_type", "is", null).order("created_at", { ascending: false }).limit(10),
-    svc.from("proxy_sessions").select("*", { count: "exact", head: true }).eq("organization_id", orgId).eq("status", "active"),
-    svc.from("tool_invocation_logs").select("*", { count: "exact", head: true }).eq("organization_id", orgId).gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
-    svc.from("tool_invocation_logs").select("*", { count: "exact", head: true }).eq("organization_id", orgId).eq("was_blocked", true).gte("created_at", new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
-    svc.from("server_health_metrics").select("latency_ms").eq("organization_id", orgId).order("recorded_at", { ascending: false }).limit(100),
+    svc
+      .from("organizations")
+      .select("name, plan_id, scans_used_this_period, tool_calls_used_this_period, proxy_first_connected_at, current_period_start, current_period_end, scan_limit, tool_call_limit")
+      .eq("id", orgId)
+      .single(),
+    svc
+      .from("mcp_servers")
+      .select("id, name, transport_type, allowlist_status, last_scan_result, risk_score, created_at")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false }),
+    svc
+      .from("alerts")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .eq("read", false),
+    svc
+      .from("scans")
+      .select("overall_score, created_at")
+      .eq("organization_id", orgId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    svc
+      .from("tool_invocation_logs")
+      .select("id, tool_name, was_blocked, threat_type, created_at, mcp_server_id")
+      .eq("organization_id", orgId)
+      .not("threat_type", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(10),
+    svc
+      .from("proxy_sessions")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .eq("status", "active"),
+    svc
+      .from("tool_invocation_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .gte("created_at", todayStart),
+    svc
+      .from("tool_invocation_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", orgId)
+      .eq("was_blocked", true)
+      .gte("created_at", todayStart),
+    svc
+      .from("server_health_metrics")
+      .select("latency_ms")
+      .eq("organization_id", orgId)
+      .order("recorded_at", { ascending: false })
+      .limit(100),
   ]);
 
   if (!org) redirect("/onboarding");
 
-  const { name: orgName, plan_id: plan, scans_used_this_period: scansUsed, tool_calls_used_this_period: toolCallsUsed, proxy_first_connected_at: proxyConnectedAt } = org;
-  const isPaidPlan = plan !== "free";
+  const {
+    name: orgName,
+    plan_id: orgPlan,
+    scans_used_this_period: scansUsed,
+    tool_calls_used_this_period: toolCallsUsed,
+    proxy_first_connected_at: proxyConnectedAt,
+  } = org;
+
+  const isPaidPlan = orgPlan !== "free";
   const serverCount = servers?.length ?? 0;
   const approvedCount = servers?.filter((s) => s.allowlist_status === "approved").length ?? 0;
   const lastScanAgo = lastScanData?.created_at ? timeAgo(lastScanData.created_at) : null;
-  const avgLatency = latencyData && latencyData.length > 0 ? Math.round(latencyData.reduce((sum, r) => sum + (r.latency_ms ?? 0), 0) / latencyData.length) : null;
+  const avgLatency =
+    latencyData && latencyData.length > 0
+      ? Math.round(latencyData.reduce((sum, r) => sum + (r.latency_ms ?? 0), 0) / latencyData.length)
+      : null;
   const threatCount = recentThreats?.length ?? 0;
 
-  const isFirstVisit = (servers?.length ?? 0) <= 1 && (activeSessions ?? 0) === 0 && (toolCallsToday ?? 0) === 0;
+  // Most recently created server for "Scan Now"
+  const mostRecentServerId = servers?.[0]?.id ?? null;
+
+  const isFirstVisit = serverCount <= 1 && (activeSessions ?? 0) === 0 && (toolCallsToday ?? 0) === 0;
+
+  // Usage data
+  const scansUsedCount = scansUsed ?? 0;
+  const toolCallsUsedCount = toolCallsUsed ?? 0;
+  const scanAllowance = tier.scanAllowance;
+  const toolCallAllowance = tier.toolCallAllowance;
+  const scanWarning = isWarningThreshold(scansUsedCount, scanAllowance);
+  const toolCallWarning = isWarningThreshold(toolCallsUsedCount, toolCallAllowance);
+
+  // ─── Empty State: zero servers ───────────────────────────────────────
+  if (serverCount === 0) {
+    const emptyConfig = EMPTY_STATES["servers"];
+    return (
+      <main className="flex flex-1 flex-col gap-6 p-6 animate-fade-in">
+        {/* Show welcome card for first-time users */}
+        <WelcomeCard proxyConnected={!!proxyConnectedAt} />
+        <EmptyState
+          icon={emptyConfig.icon}
+          heading="No servers yet"
+          description="Register your first MCP server to begin security scanning and get real-time threat protection."
+          cta={{ label: "Add your first server", href: "/servers/new" }}
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="flex flex-1 flex-col gap-6 p-6 animate-fade-in">
       {/* ── Welcome Card (first visit) ─────────────────────────────── */}
-      {isFirstVisit && (
-        <WelcomeCard proxyConnected={!!proxyConnectedAt} />
-      )}
+      {isFirstVisit && <WelcomeCard proxyConnected={!!proxyConnectedAt} />}
 
       {/* ── Status Strip ──────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-bg-surface px-4 py-3 text-sm">
         <div className="flex items-center gap-2">
           <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-breathe rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
+            <span className="absolute inline-flex h-full w-full animate-breathe rounded-full bg-secure opacity-75" />
+            <span className="relative inline-flex size-2 rounded-full bg-secure" />
           </span>
           <span className="text-slate-200 font-medium">
             {proxyConnectedAt ? "Protected" : "Scanning"}
@@ -134,15 +213,19 @@ const DashboardPage = async () => {
         {threatCount > 0 && (
           <>
             <span className="text-slate-600">·</span>
-            <Link href="/alerts?severity=critical" className="text-amber-400 hover:underline">{threatCount} active threat{threatCount !== 1 ? "s" : ""}</Link>
+            <Link href="/alerts?severity=critical" className="text-caution hover:underline">
+              {threatCount} active threat{threatCount !== 1 ? "s" : ""}
+            </Link>
           </>
         )}
         <span className="text-slate-600">·</span>
-        <span className="text-slate-400">{serverCount} server{serverCount !== 1 ? "s" : ""} online</span>
+        <span className="text-slate-400">
+          {serverCount} server{serverCount !== 1 ? "s" : ""} online
+        </span>
         <div className="ml-auto hidden sm:flex items-center gap-2">
           {!proxyConnectedAt && (
             <Link href="/onboarding/proxy-setup">
-              <Button size="xs" variant="outline" className="border-amber-500/30 text-amber-400 h-7 text-[10px] gap-1">
+              <Button size="xs" variant="outline" className="border-caution/30 text-caution h-7 text-[10px] gap-1">
                 Connect proxy <ArrowRight className="size-3" />
               </Button>
             </Link>
@@ -151,9 +234,10 @@ const DashboardPage = async () => {
       </div>
 
       {/* ── Quick Actions Bar ──────────────────────────────────────────── */}
-      <QuickActionsBar mostRecentServerId={servers?.[0]?.id ?? null} />
+      <QuickActionsBar mostRecentServerId={mostRecentServerId} />
 
-      {/* ── Two-Column KPI Layout ──────────────────────────────────────── */}          <div className="relative grid gap-6 grid-cols-2 lg:grid-cols-2">
+      {/* ── Two-Column KPI Layout ──────────────────────────────────────── */}
+      <div className="relative grid gap-6 grid-cols-2 lg:grid-cols-2">
         {/* Vertical divider */}
         <div className="hidden lg:block absolute left-1/2 top-4 bottom-4 w-px bg-white/10 -translate-x-px" />
 
@@ -161,7 +245,7 @@ const DashboardPage = async () => {
         <Card className="border-white/10 bg-bg-surface" style={{ borderTop: "2px solid var(--monitor)" }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <div className="size-6 rounded-md bg-blue-500/15 flex items-center justify-center">
+              <div className="size-6 rounded-md bg-monitor/15 flex items-center justify-center">
                 <ScanSearch className="size-3.5 text-monitor" />
               </div>
               <CardTitle className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
@@ -176,7 +260,18 @@ const DashboardPage = async () => {
                 <p className="text-[10px] text-slate-500 mt-0.5">Servers scanned</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold font-mono" style={{ color: lastScanData?.overall_score ? (lastScanData.overall_score >= 80 ? "var(--secure)" : lastScanData.overall_score >= 60 ? "var(--caution)" : "var(--threat)") : "var(--muted-foreground)" }}>
+                <p
+                  className="text-2xl font-bold font-mono"
+                  style={{
+                    color: lastScanData?.overall_score
+                      ? lastScanData.overall_score >= 80
+                        ? "var(--secure)"
+                        : lastScanData.overall_score >= 60
+                          ? "var(--caution)"
+                          : "var(--threat)"
+                      : "var(--muted-foreground)",
+                  }}
+                >
                   {lastScanData?.overall_score ?? "—"}
                 </p>
                 <p className="text-[10px] text-slate-500 mt-0.5">Risk score</p>
@@ -186,14 +281,20 @@ const DashboardPage = async () => {
                 <p className="text-[10px] text-slate-500 mt-0.5">Total servers</p>
               </div>
             </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {[
                 { label: "Static Analysis", ok: true },
                 { label: "Domain Verify", ok: true },
                 { label: "Sandbox Exec", ok: Boolean(lastScanData) },
                 { label: "CVE Match", ok: true },
               ].map((item) => (
-                <span key={item.label} className={cn("flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium", item.ok ? "bg-secure/10 text-secure" : "bg-white/10 text-slate-500")}>
+                <span
+                  key={item.label}
+                  className={cn(
+                    "flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+                    item.ok ? "bg-secure/10 text-secure" : "bg-white/10 text-slate-500"
+                  )}
+                >
                   {item.ok ? "✓" : "○"} {item.label}
                 </span>
               ))}
@@ -205,7 +306,7 @@ const DashboardPage = async () => {
         <Card className="border-white/10 bg-bg-surface" style={{ borderTop: "2px solid var(--secure)" }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
-              <div className="size-6 rounded-md bg-emerald-500/15 flex items-center justify-center">
+              <div className="size-6 rounded-md bg-secure/15 flex items-center justify-center">
                 <Shield className="size-3.5 text-secure" />
               </div>
               <CardTitle className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
@@ -225,7 +326,14 @@ const DashboardPage = async () => {
                   <p className="text-[10px] text-slate-500 mt-0.5">Tool calls today</p>
                 </div>
                 <div className="text-center">
-                  <p className={cn("text-2xl font-bold font-mono", blockedToday && blockedToday > 0 ? "text-threat" : "text-slate-200")}>{blockedToday ?? 0}</p>
+                  <p
+                    className={cn(
+                      "text-2xl font-bold font-mono",
+                      blockedToday && blockedToday > 0 ? "text-threat" : "text-slate-200"
+                    )}
+                  >
+                    {blockedToday ?? 0}
+                  </p>
                   <p className="text-[10px] text-slate-500 mt-0.5">Blocked today</p>
                 </div>
               </div>
@@ -234,7 +342,7 @@ const DashboardPage = async () => {
                 <CloudOff className="size-8 text-slate-600 mx-auto mb-2" />
                 <p className="text-sm text-slate-500 mb-3">Proxy not connected — no runtime protection active</p>
                 <Link href="/onboarding/proxy-setup">
-                  <Button size="sm" variant="outline" className="border-blue-500/30 text-blue-400 gap-1.5">
+                  <Button size="sm" variant="outline" className="border-monitor/30 text-monitor gap-1.5">
                     <Shield className="size-3.5" />
                     Enable runtime protection <ArrowRight className="size-3.5" />
                   </Button>
@@ -242,7 +350,9 @@ const DashboardPage = async () => {
               </div>
             )}
             {avgLatency !== null && (
-              <p className="mt-3 text-[10px] text-slate-500 text-center font-mono">Avg proxy latency: {avgLatency}ms</p>
+              <p className="mt-3 text-[10px] text-slate-500 text-center font-mono">
+                Avg proxy latency: {avgLatency}ms
+              </p>
             )}
           </CardContent>
         </Card>
@@ -258,14 +368,13 @@ const DashboardPage = async () => {
                 <CardTitle className="text-sm font-semibold text-slate-200">NSA MCP Security CSI</CardTitle>
               </div>
               <Link href="/compliance">
-                <Button size="xs" variant="link" className="text-[10px] text-blue-400 gap-1">
+                <Button size="xs" variant="link" className="text-[10px] text-monitor gap-1">
                   View Full Report <ArrowRight className="size-3" />
                 </Button>
               </Link>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Progress bar */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs">
                 <span className="text-slate-400">NSA Control Coverage</span>
@@ -285,7 +394,9 @@ const DashboardPage = async () => {
                   {item.ok ? (
                     <CheckCircle2 className="size-3.5 text-secure shrink-0" />
                   ) : (
-                    <span className="size-3.5 flex items-center justify-center text-caution shrink-0 text-[10px]">○</span>
+                    <span className="size-3.5 flex items-center justify-center text-caution shrink-0 text-[10px]">
+                      ○
+                    </span>
                   )}
                   {item.label}
                 </div>
@@ -303,107 +414,164 @@ const DashboardPage = async () => {
         <ThreatFeedSection threats={recentThreats as ThreatEntry[]} />
       )}
 
-      {/* ── Usage Meter ─────────────────────────────────────────────────── */}
+      {/* ── Usage Meters ────────────────────────────────────────────────── */}
       <Card className="border-white/10 bg-bg-surface">
         <CardHeader className="pb-3">
           <CardTitle className="text-xs font-semibold tracking-wider text-slate-400 uppercase">Usage</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Scans usage meter */}
           <div className="space-y-1.5">
-            <div className="flex justify-between text-xs">
-              <span className="text-slate-400">Scans</span>
-              <span className="text-slate-300 font-mono">{scansUsed ?? 0} / {org.scan_limit ?? 50}</span>
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-2 text-slate-400">
+                Scans
+                {scanWarning && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1.5 py-0 border-caution/30"
+                    style={{ color: "var(--caution)" }}
+                  >
+                    <AlertTriangle className="size-2.5 mr-0.5" />
+                    ≥80%
+                  </Badge>
+                )}
+              </span>
+              <span className="text-slate-300 font-mono">
+                {scansUsedCount} / {isUnlimited(scanAllowance) ? "∞" : scanAllowance}
+              </span>
             </div>
-            <Progress value={Math.min(100, ((scansUsed ?? 0) / (org.scan_limit ?? 50)) * 100)} className="h-1.5" />
+            {!isUnlimited(scanAllowance) && (
+              <Progress
+                value={Math.min(100, (scansUsedCount / (scanAllowance as number)) * 100)}
+                className="h-1.5"
+              />
+            )}
           </div>
-          {toolCallsUsed != null && (
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-slate-400">Tool calls</span>
-                <span className="text-slate-300 font-mono">{(toolCallsUsed ?? 0).toLocaleString()} / {(org.tool_call_limit ?? 25000).toLocaleString()}</span>
-              </div>
-              <Progress value={Math.min(100, ((toolCallsUsed ?? 0) / (org.tool_call_limit ?? 25000)) * 100)} className="h-1.5" />
+
+          {/* Tool calls usage meter */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="flex items-center gap-2 text-slate-400">
+                Tool calls
+                {toolCallWarning && (
+                  <Badge
+                    variant="outline"
+                    className="text-[9px] px-1.5 py-0 border-caution/30"
+                    style={{ color: "var(--caution)" }}
+                  >
+                    <AlertTriangle className="size-2.5 mr-0.5" />
+                    ≥80%
+                  </Badge>
+                )}
+              </span>
+              <span className="text-slate-300 font-mono">
+                {toolCallsUsedCount.toLocaleString()} /{" "}
+                {isUnlimited(toolCallAllowance) ? "∞" : (toolCallAllowance as number).toLocaleString()}
+              </span>
             </div>
-          )}
+            {!isUnlimited(toolCallAllowance) && (
+              <Progress
+                value={Math.min(100, (toolCallsUsedCount / (toolCallAllowance as number)) * 100)}
+                className="h-1.5"
+              />
+            )}
+          </div>
+
           <Link href="/settings/billing">
-            <Button size="sm" variant="link" className="text-xs text-blue-400 -ml-2 gap-1">
+            <Button size="sm" variant="link" className="text-xs text-monitor -ml-2 gap-1">
               View full usage <ArrowRight className="size-3" />
             </Button>
           </Link>
         </CardContent>
       </Card>
 
-      {/* ── Empty State ────────────────────────────────────────────────── */}
-      {(!servers || servers.length === 0) && (
-        <div className="flex flex-1 flex-col items-center justify-center py-16 text-center animate-fade-in">
-          <Server className="size-12 text-white/20 mb-4" />
-          <h2 className="text-lg font-semibold text-slate-300 mb-1">No servers yet</h2>
-          <p className="text-sm text-slate-500 mb-6 max-w-sm">
-            Register your first MCP server to begin security scanning and get real-time threat protection.
-          </p>
-          <Link href="/onboarding">
-            <Button className="gap-2">
-              <Server className="size-4" />
-              Add your first server
-            </Button>
-          </Link>
-        </div>
-      )}
-
       {/* ── Server Health Grid ──────────────────────────────────────────── */}
-      {servers && servers.length > 0 && (
-        <div className="animate-fade-in">
-          <h2 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
-            <Server className="size-4 text-slate-400" />
-            Servers
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {servers.map((server, i) => (
-              <Link key={server.id} href={`/servers/${server.id}`}>
-                <Card
-                  className="border-white/10 bg-bg-surface hover:bg-bg-elevated transition-all duration-150 cursor-pointer hover:-translate-y-0.5"
-                  style={{ animationDelay: `${i * 80}ms` }}
-                >
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-200 truncate flex items-center gap-2">
-                          <span className={cn("size-2 rounded-full shrink-0", server.allowlist_status === "approved" ? "bg-secure" : server.allowlist_status === "blocked" ? "bg-threat" : "bg-caution")} />
-                          {server.name}
-                        </p>
-                        <p className="text-[10px] text-slate-500 font-mono mt-0.5">{server.id.slice(0, 8)}…</p>
-                      </div>
-                      <Badge variant={server.transport_type === "http" ? "default" : "secondary"} className="text-[10px] shrink-0">
-                        {server.transport_type === "http" ? "HTTP" : "STDIO"}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-2 text-[10px]">
-                      <Badge className={cn("text-[9px] px-1.5 py-0", server.allowlist_status === "approved" ? "bg-secure/15 text-secure" : server.allowlist_status === "blocked" ? "bg-threat/15 text-threat" : "bg-caution/15 text-caution")}>
-                        {server.allowlist_status}
-                      </Badge>
-                      {server.risk_score != null && (
-                        <span className={cn("font-mono", server.last_scan_result === "clean" ? "text-secure" : server.last_scan_result === "suspicious" ? "text-caution" : "text-threat")}>
-                          {server.risk_score}/100
-                        </span>
-                      )}
-                    </div>
-                    {server.risk_score != null && (
-                      <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
-                        <div
-                          className={cn("h-full rounded-full transition-all duration-500", server.risk_score >= 80 ? "bg-secure" : server.risk_score >= 60 ? "bg-caution" : "bg-threat")}
-                          style={{ width: `${server.risk_score}%` }}
+      <div className="animate-fade-in">
+        <h2 className="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+          <Server className="size-4 text-slate-400" />
+          Servers
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {servers!.map((server, i) => (
+            <Link key={server.id} href={`/servers/${server.id}`}>
+              <Card
+                className="border-white/10 bg-bg-surface hover:bg-bg-elevated transition-all duration-150 cursor-pointer hover:-translate-y-0.5"
+                style={{ animationDelay: `${i * 80}ms` }}
+              >
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-200 truncate flex items-center gap-2">
+                        <span
+                          className={cn(
+                            "size-2 rounded-full shrink-0",
+                            server.allowlist_status === "approved"
+                              ? "bg-secure"
+                              : server.allowlist_status === "blocked"
+                                ? "bg-threat"
+                                : "bg-caution"
+                          )}
                         />
-                      </div>
+                        {server.name}
+                      </p>
+                      <p className="text-[10px] text-slate-500 font-mono mt-0.5">{server.id.slice(0, 8)}…</p>
+                    </div>
+                    <Badge
+                      variant={server.transport_type === "http" ? "default" : "secondary"}
+                      className="text-[10px] shrink-0"
+                    >
+                      {server.transport_type === "http" ? "HTTP" : "STDIO"}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <Badge
+                      className={cn(
+                        "text-[9px] px-1.5 py-0",
+                        server.allowlist_status === "approved"
+                          ? "bg-secure/15 text-secure"
+                          : server.allowlist_status === "blocked"
+                            ? "bg-threat/15 text-threat"
+                            : "bg-caution/15 text-caution"
+                      )}
+                    >
+                      {server.allowlist_status}
+                    </Badge>
+                    {server.risk_score != null && (
+                      <span
+                        className={cn(
+                          "font-mono",
+                          server.last_scan_result === "clean"
+                            ? "text-secure"
+                            : server.last_scan_result === "suspicious"
+                              ? "text-caution"
+                              : "text-threat"
+                        )}
+                      >
+                        {server.risk_score}/100
+                      </span>
                     )}
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
+                  </div>
+                  {server.risk_score != null && (
+                    <div className="h-1 w-full overflow-hidden rounded-full bg-white/5">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all duration-500",
+                          server.risk_score >= 80
+                            ? "bg-secure"
+                            : server.risk_score >= 60
+                              ? "bg-caution"
+                              : "bg-threat"
+                        )}
+                        style={{ width: `${server.risk_score}%` }}
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
         </div>
-      )}
+      </div>
     </main>
   );
-};
-
-export default DashboardPage;
+}

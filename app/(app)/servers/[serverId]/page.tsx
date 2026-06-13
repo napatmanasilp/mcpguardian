@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowRight, FileText, Radar, ScanSearch, Terminal, Activity } from "lucide-react";
@@ -9,6 +10,34 @@ import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ serverId: string }>;
+}): Promise<Metadata> {
+  const { serverId } = await params;
+  const svc = createServiceClient();
+  const { data: server } = await svc
+    .from("mcp_servers")
+    .select("name")
+    .eq("id", serverId)
+    .maybeSingle();
+
+  if (server?.name) {
+    const name = server.name.length > 30 ? server.name.slice(0, 27) + "..." : server.name;
+    const title = `${name} — Servers — MCPGuardian`.slice(0, 60);
+    return {
+      title,
+      description: `Security details and scan history for ${server.name}.`.slice(0, 160),
+    };
+  }
+
+  return {
+    title: "Server — MCPGuardian",
+    description: "View server security details, risk score, and scan history.",
+  };
+}
 
 const ServerDetailPage = async ({
   params,
@@ -85,18 +114,18 @@ const ServerDetailPage = async ({
               variant="outline"
               className={cn(
                 "text-[10px]",
-                server.allowlist_status === "approved" && "border-emerald-500/30 text-emerald-400",
-                server.allowlist_status === "blocked" && "border-red-500/30 text-red-400",
-                server.allowlist_status === "monitoring" && "border-amber-500/30 text-amber-400",
+                server.allowlist_status === "approved" && "border-secure/30 text-secure",
+                server.allowlist_status === "blocked" && "border-threat/30 text-threat",
+                server.allowlist_status === "monitoring" && "border-caution/30 text-caution",
               )}
             >
               {server.allowlist_status}
             </Badge>
             {server.risk_score != null && (
               <span className={cn(
-                server.last_scan_result === "clean" ? "text-emerald-400" :
-                server.last_scan_result === "suspicious" ? "text-amber-400" :
-                server.last_scan_result === "malicious" ? "text-red-400" : ""
+                server.last_scan_result === "clean" ? "text-secure" :
+                server.last_scan_result === "suspicious" ? "text-caution" :
+                server.last_scan_result === "malicious" ? "text-threat" : ""
               )}>
                 Risk: {server.risk_score}/100
               </span>

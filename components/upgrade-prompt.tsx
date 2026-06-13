@@ -72,20 +72,20 @@ export function UpgradePrompt({
     return (
       <div
         className={cn(
-          "flex items-center gap-2 rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-xs",
+          "flex items-center gap-2 rounded-md bg-caution/10 border border-caution/20 px-3 py-2 text-xs",
           className,
         )}
       >
-        <Lock className="size-3 text-amber-400 shrink-0" />
+        <Lock className="size-3 text-caution shrink-0" />
         <span className="text-slate-300 flex-1 min-w-0">
-          <span className="font-medium text-amber-300">{featureLabel}</span>{" "}
+          <span className="font-medium text-caution">{featureLabel}</span>{" "}
           requires {displayName} —{" "}
           {priceMonthly > 0 ? `from $${priceMonthly}/mo` : "contact sales"}
         </span>
         <Button
           size="sm"
           variant="outline"
-          className="border-amber-500/30 text-amber-400 text-[10px] h-6 shrink-0"
+          className="border-caution/30 text-caution text-[10px] h-6 shrink-0"
           disabled={loading}
           onClick={handleUpgrade}
         >
@@ -103,23 +103,23 @@ export function UpgradePrompt({
   return (
     <div
       className={cn(
-        "rounded-lg border border-blue-500/30 bg-gradient-to-br from-blue-500/10 to-transparent p-6",
+        "rounded-lg border border-monitor/30 bg-gradient-to-br from-monitor/10 to-transparent p-6",
         className,
       )}
     >
       <div className="flex items-start gap-4">
-        <div className="size-10 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
-          <Lock className="size-5 text-blue-400" />
+        <div className="size-10 rounded-full bg-monitor/20 flex items-center justify-center shrink-0">
+          <Lock className="size-5 text-monitor" />
         </div>
         <div className="flex-1 min-w-0">
           <h3 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-            <Sparkles className="size-3.5 text-blue-400" />
+            <Sparkles className="size-3.5 text-monitor" />
             Unlock {featureLabel}
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             Your current plan (<span className="font-medium capitalize">{currentPlan}</span>) does not
             include <span className="font-medium text-slate-300">{featureLabel}</span>. Upgrade to{" "}
-            <span className="font-semibold text-blue-300">{displayName}</span>
+            <span className="font-semibold text-monitor">{displayName}</span>
             {priceMonthly > 0 && (
               <>
                 {" "}starting at <span className="font-mono text-slate-200">${priceMonthly}/mo</span>

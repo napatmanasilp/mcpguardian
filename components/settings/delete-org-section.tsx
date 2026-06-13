@@ -54,9 +54,9 @@ export function DeleteOrgSection({ orgName }: DeleteOrgSectionProps) {
   }, [state, router]);
 
   return (
-    <Card className="border-red-500/50 bg-[hsl(222,47%,6%)]">
+    <Card className="border-threat/50 bg-[hsl(222,47%,6%)]">
       <CardHeader>
-        <CardTitle className="text-sm font-semibold text-red-400">
+        <CardTitle className="text-sm font-semibold text-threat">
           Danger Zone
         </CardTitle>
       </CardHeader>

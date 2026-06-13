@@ -78,10 +78,10 @@ interface SeverityLevel {
 }
 
 const SEVERITY_LEVELS: SeverityLevel[] = [
-  { level: "CRITICAL", label: "Critical", color: { bg: "bg-red-500", text: "text-red-400" } },
-  { level: "HIGH", label: "High", color: { bg: "bg-orange-500", text: "text-orange-400" } },
-  { level: "MEDIUM", label: "Medium", color: { bg: "bg-amber-500", text: "text-amber-400" } },
-  { level: "LOW", label: "Low", color: { bg: "bg-blue-500", text: "text-blue-400" } },
+  { level: "CRITICAL", label: "Critical", color: { bg: "bg-threat", text: "text-threat" } },
+  { level: "HIGH", label: "High", color: { bg: "bg-threat", text: "text-threat" } },
+  { level: "MEDIUM", label: "Medium", color: { bg: "bg-caution", text: "text-caution" } },
+  { level: "LOW", label: "Low", color: { bg: "bg-monitor", text: "text-monitor" } },
   { level: "INFO", label: "Info", color: { bg: "bg-slate-500", text: "text-slate-400" } },
 ];
 
@@ -240,7 +240,7 @@ function SbomTable({ result }: { result: ScanResult }) {
   return (
     <details className="group" open={hasCveMatches}>
       <summary className="flex items-center gap-2 cursor-pointer text-sm font-semibold text-slate-300 hover:text-white py-3 border-t border-white/10 select-none">
-        <Package className="size-4 text-blue-400" />
+        <Package className="size-4 text-monitor" />
         Software Bill of Materials
         <span className="text-xs font-mono text-slate-500 font-normal">
           ({sbom.length} package{sbom.length !== 1 ? "s" : ""}
@@ -265,7 +265,7 @@ function SbomTable({ result }: { result: ScanResult }) {
                   key={i}
                   className={cn(
                     "border-b border-white/5",
-                    entry.cve_matches.length > 0 ? "bg-red-500/5" : "hover:bg-white/[0.02]",
+                    entry.cve_matches.length > 0 ? "bg-threat/5" : "hover:bg-white/[0.02]",
                   )}
                 >
                   <td className="px-3 py-2 text-slate-200">{entry.package}</td>
@@ -275,7 +275,7 @@ function SbomTable({ result }: { result: ScanResult }) {
                       ? entry.cve_matches.map((cve) => (
                           <span
                             key={cve}
-                            className="inline-block mr-1 mb-0.5 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 text-[10px]"
+                            className="inline-block mr-1 mb-0.5 px-1.5 py-0.5 rounded bg-threat/20 text-threat border border-threat/30 text-[10px]"
                           >
                             {cve}
                           </span>
@@ -284,9 +284,9 @@ function SbomTable({ result }: { result: ScanResult }) {
                   </td>
                   <td className="px-3 py-2">
                     {entry.cve_matches.length > 0 ? (
-                      <span className="text-red-400 font-semibold text-[10px]">⚠ Vulnerable</span>
+                      <span className="text-threat font-semibold text-[10px]">⚠ Vulnerable</span>
                     ) : (
-                      <span className="text-emerald-400 text-[10px]">✓ Safe</span>
+                      <span className="text-secure text-[10px]">✓ Safe</span>
                     )}
                   </td>
                 </tr>
@@ -486,7 +486,7 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
             { icon: FileText, label: "Resources Scanned", value: result.totalResourcesScanned },
           ].map(({ icon: Icon, label, value }) => (
             <div key={label} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2.5">
-              <Icon className="size-4 text-blue-400 shrink-0" />
+              <Icon className="size-4 text-monitor shrink-0" />
               <div>
                 <p className="text-lg font-bold tabular-nums">{value}</p>
                 <p className="text-[10px] text-slate-500 leading-tight">{label}</p>
@@ -507,7 +507,7 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
       {/* ── SECTION 2: OWASP MCP Compliance Grid ─────────────────────── */}
       <div className="space-y-2.5">
         <div className="flex items-center gap-2">
-          <Shield className="size-4 text-blue-400" />
+          <Shield className="size-4 text-monitor" />
           <h3 className="text-sm font-semibold text-slate-300">OWASP MCP Coverage</h3>
           {result.complianceSummary && (
             <span className="text-[10px] font-mono text-slate-500">
@@ -537,8 +537,8 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
                 className={cn(
                   "rounded-lg border p-3 space-y-2.5",
                   risk.type === "TOOL_SHADOWING_RISK" && "border-purple-500/30 bg-purple-500/5",
-                  risk.type === "CROSS_SERVER_MANIPULATION" && "border-red-500/30 bg-red-500/5",
-                  risk.type === "MULTI_SERVER_COMPOUND_RISK" && "border-amber-500/30 bg-amber-500/5",
+                  risk.type === "CROSS_SERVER_MANIPULATION" && "border-threat/30 bg-threat/5",
+                  risk.type === "MULTI_SERVER_COMPOUND_RISK" && "border-caution/30 bg-caution/5",
                 )}
               >
                 <div className="flex items-center gap-2 flex-wrap">
@@ -549,13 +549,13 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
                     </div>
                   )}
                   {risk.type === "CROSS_SERVER_MANIPULATION" && (
-                    <div className="flex items-center gap-1.5 rounded-md bg-red-500/10 px-2 py-1 text-[11px] font-semibold text-red-400">
+                    <div className="flex items-center gap-1.5 rounded-md bg-threat/10 px-2 py-1 text-[11px] font-semibold text-threat">
                       <AlertTriangle className="size-3.5" />
                       <span>Cross-Server Manipulation</span>
                     </div>
                   )}
                   {risk.type === "MULTI_SERVER_COMPOUND_RISK" && (
-                    <div className="flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-semibold text-amber-400">
+                    <div className="flex items-center gap-1.5 rounded-md bg-caution/10 px-2 py-1 text-[11px] font-semibold text-caution">
                       <Layers className="size-3.5" />
                       <span>Compound Risk</span>
                     </div>
@@ -586,7 +586,7 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
                 )}
 
                 <div className="flex items-start gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-xs">
-                  <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-amber-400" />
+                  <Lightbulb className="mt-0.5 size-3.5 shrink-0 text-caution" />
                   <span className="text-slate-300">{risk.fix}</span>
                 </div>
               </div>
@@ -615,7 +615,7 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
                     <div className="flex items-center gap-3 flex-1 min-w-0">
                       {/* Transport badge */}
                       {isHttp ? (
-                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                        <span className="shrink-0 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-monitor/20 text-monitor border border-monitor/30">
                           HTTP
                         </span>
                       ) : (
@@ -633,12 +633,12 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
                       {/* Issue count pills */}
                       <div className="flex items-center gap-1.5 ml-auto">
                         {serverCritCount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-threat/20 text-threat border border-threat/30">
                             {serverCritCount} CRIT
                           </span>
                         )}
                         {serverHighCount > 0 && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-threat/20 text-threat border border-threat/30">
                             {serverHighCount} HIGH
                           </span>
                         )}
@@ -647,9 +647,9 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
                       {/* Auth status icon */}
                       <div title={hasAuthIssue ? "Missing or weak authentication" : "Authentication OK"}>
                         {hasAuthIssue ? (
-                          <LockOpen className="size-4 text-red-400 shrink-0" />
+                          <LockOpen className="size-4 text-threat shrink-0" />
                         ) : (
-                          <Lock className="size-4 text-emerald-400 shrink-0" />
+                          <Lock className="size-4 text-secure shrink-0" />
                         )}
                       </div>
                     </div>
@@ -657,7 +657,7 @@ export const ScanResults = ({ result, config, onReset }: ScanResultsProps) => {
                   <AccordionContent className="px-3 pb-3">
                     {server.issues.length === 0 ? (
                       <div className="flex items-center gap-2 py-2 text-slate-400">
-                        <CheckCircle2 className="size-4 text-emerald-500" />
+                        <CheckCircle2 className="size-4 text-secure" />
                         <span className="text-sm">No issues found</span>
                       </div>
                     ) : (

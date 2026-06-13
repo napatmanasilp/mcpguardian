@@ -1,47 +1,46 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+
+export const metadata: Metadata = {
+  title: "General Settings — MCPGuardian",
+  description: "Manage your organization name, logo, and timezone preferences.",
+};
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DeleteOrgSection } from "@/components/settings/delete-org-section";
+import { NotificationToggle } from "@/components/settings/notification-toggle";
 import { OrgLogoUpload } from "@/components/settings/org-logo-upload";
 import { OrgNameForm } from "@/components/settings/org-name-form";
 import { TimezoneSelector } from "@/components/settings/timezone-selector";
 import { signOut } from "@/lib/actions/auth";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
 const GeneralSettingsPage = async () => {
+  const orgContext = await getOrgContext();
+  if (!orgContext) redirect("/onboarding");
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
+
+  const { data: org } = await svc
+    .from("organizations")
+    .select("name, timezone, logo_url, email_notifications_enabled")
+    .eq("id", orgContext.organizationId)
     .single();
 
-  let orgName = "";
-  let orgTimezone = "UTC";
-  let orgLogoUrl: string | null = null;
-  let userEmail = user.email ?? "";
-
-  if (membership) {
-    const { data: org } = await svc
-      .from("organizations")
-      .select("name, timezone, logo_url")
-      .eq("id", membership.organization_id)
-      .single();
-    if (org) {
-      orgName = org.name;
-      orgTimezone = org.timezone ?? "UTC";
-      orgLogoUrl = org.logo_url ?? null;
-    }
-  }
+  const orgName = org?.name ?? "";
+  const orgTimezone = org?.timezone ?? "UTC";
+  const orgLogoUrl = org?.logo_url ?? null;
+  const emailNotifications = org?.email_notifications_enabled ?? true;
+  const userEmail = user.email ?? "";
 
   return (
     <main className="flex flex-1 flex-col gap-6 p-6">
@@ -74,6 +73,22 @@ const GeneralSettingsPage = async () => {
         </CardHeader>
         <CardContent>
           <TimezoneSelector currentTimezone={orgTimezone} />
+        </CardContent>
+      </Card>
+
+      {/* Notifications */}
+      <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold text-slate-200">Notifications</CardTitle>
+          <CardDescription className="text-xs text-slate-500">
+            Manage how you receive security alerts.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <NotificationToggle
+            initialEnabled={emailNotifications}
+            organizationId={orgContext.organizationId}
+          />
         </CardContent>
       </Card>
 

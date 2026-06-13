@@ -3,7 +3,10 @@
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { ActionState } from "@/lib/types/settings";
-import { validateOrgName } from "@/lib/utils/settings";
+import { OrgNameSchema, OrgTimezoneSchema } from "@/lib/validation/schemas";
+
+const LOGO_MIME_WHITELIST = ["image/png", "image/jpeg", "image/svg+xml"];
+const LOGO_MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 
 export async function updateOrgName(
   _prevState: ActionState,
@@ -11,12 +14,14 @@ export async function updateOrgName(
 ): Promise<ActionState> {
   const rawName = formData.get("name");
 
-  const validation = validateOrgName(rawName);
-  if (!validation.valid) {
-    return { error: validation.error! };
+  // Validate with Zod
+  const parsed = OrgNameSchema.safeParse({ name: rawName });
+  if (!parsed.success) {
+    const firstError = parsed.error.issues[0]?.message ?? "Validation failed.";
+    return { error: firstError };
   }
 
-  const name = validation.trimmedName;
+  const name = parsed.data.name;
 
   // Authenticate the user
   const supabase = await createClient();
@@ -44,7 +49,7 @@ export async function updateOrgName(
 
   // Verify admin or owner role
   if (membership.role !== "admin" && membership.role !== "owner") {
-    return { error: "Unauthorized" };
+    return { error: "Unauthorized. Only admins and owners can modify settings." };
   }
 
   // Update the organization name
@@ -64,26 +69,22 @@ export async function updateOrgTimezone(
   _prevState: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
-  const rawTimezone = formData.get("timezone");
+  const raw = { timezone: formData.get("timezone") as string | null ?? "" };
 
-  if (typeof rawTimezone !== "string" || rawTimezone.trim().length === 0) {
-    return { error: "Timezone is required." };
+  const parsed = OrgTimezoneSchema.safeParse(raw);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const key = issue.path[0]?.toString();
+      if (key && !fieldErrors[key]) {
+        fieldErrors[key] = issue.message;
+      }
+    }
+    const firstError = parsed.error.issues[0]?.message ?? "Validation failed.";
+    return { error: firstError, fieldErrors };
   }
 
-  const timezone = rawTimezone.trim();
-
-  // Validate the timezone is a valid IANA timezone
-  try {
-    const validTimezones = Intl.supportedValuesOf("timeZone");
-    if (!validTimezones.includes(timezone)) {
-      return { error: "Invalid timezone." };
-    }
-  } catch {
-    // Fallback: basic format check if Intl.supportedValuesOf is not available
-    if (!/^[A-Za-z_/]+$/.test(timezone)) {
-      return { error: "Invalid timezone format." };
-    }
-  }
+  const timezone = parsed.data.timezone.trim();
 
   // Authenticate the user
   const supabase = await createClient();
@@ -133,20 +134,23 @@ export async function uploadOrgLogo(
 ): Promise<ActionState> {
   const file = formData.get("logo");
 
+  // Validate input with structured error response
   if (!file || !(file instanceof File) || file.size === 0) {
-    return { error: "No file provided." };
+    return { error: "No file provided.", fieldErrors: { logo: "No file provided." } };
   }
 
-  // Server-side validation
-  const MIME_WHITELIST = ["image/png", "image/jpeg", "image/svg+xml"];
-  const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
-
-  if (!MIME_WHITELIST.includes(file.type)) {
-    return { error: "Unsupported file type. Please upload a PNG, JPEG, or SVG file." };
+  if (!LOGO_MIME_WHITELIST.includes(file.type)) {
+    return {
+      error: "Unsupported file type. Please upload a PNG, JPEG, or SVG file.",
+      fieldErrors: { logo: "Unsupported file type. Please upload a PNG, JPEG, or SVG file." },
+    };
   }
 
-  if (file.size > MAX_FILE_SIZE) {
-    return { error: "File is too large. Maximum size is 2 MB." };
+  if (file.size > LOGO_MAX_FILE_SIZE) {
+    return {
+      error: "File is too large. Maximum size is 2 MB.",
+      fieldErrors: { logo: "File is too large. Maximum size is 2 MB." },
+    };
   }
 
   // Authenticate the user

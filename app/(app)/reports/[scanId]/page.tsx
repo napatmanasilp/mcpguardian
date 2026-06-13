@@ -1,14 +1,40 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { ScanResults } from "@/components/scan-results";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { MiniScoreRing } from "@/components/scan/mini-score-ring";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
 import type { Grade, ScanResult } from "@/lib/scanner/types";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ scanId: string }>;
+}): Promise<Metadata> {
+  const { scanId } = await params;
+  const shortId = scanId.slice(0, 8);
+  return {
+    title: `Scan ${shortId}… — Reports — MCPGuardian`,
+    description: `Detailed scan report and findings for scan ${shortId}.`.slice(0, 160),
+  };
+}
+
+// Code-split: ScanResults is a very large client component (500+ lines with sub-components).
+// Requirement 20.1: code-split client components > 50 KB not needed on initial render
+const ScanResults = dynamic(
+  () => import("@/components/scan-results").then((mod) => mod.ScanResults),
+  {
+    loading: () => (
+      <PageSkeleton blocks={[{ type: "chart", height: "16rem" }, { type: "table", height: "12rem" }]} />
+    ),
+  },
+);
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 

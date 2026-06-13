@@ -1,5 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 
+export const dynamic = "force-dynamic";
+
 // Live stats for homepage social proof section
 export async function GET() {
   const supabase = createServiceClient();

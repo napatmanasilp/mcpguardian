@@ -46,9 +46,9 @@ export function FrameworkTabs({ nsaControls, owaspControls }: FrameworkTabsProps
             {activeNsaControls.map((control) => (
               <div key={control.id} className="flex items-center gap-3 rounded-md bg-white/5 px-3 py-2">
                 {control.passed ? (
-                  <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="size-4 text-secure shrink-0" />
                 ) : (
-                  <span className="size-4 flex items-center justify-center text-amber-400 shrink-0 text-xs">○</span>
+                  <span className="size-4 flex items-center justify-center text-caution shrink-0 text-xs">○</span>
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-slate-300">{control.label}</p>
@@ -58,7 +58,7 @@ export function FrameworkTabs({ nsaControls, owaspControls }: FrameworkTabsProps
                   variant="outline"
                   className={cn(
                     "text-[9px] shrink-0",
-                    control.passed ? "border-emerald-500/30 text-emerald-400" : "border-amber-500/30 text-amber-400",
+                    control.passed ? "border-secure/30 text-secure" : "border-caution/30 text-caution",
                   )}
                 >
                   {control.passed ? "Active" : "Pending"}
@@ -78,9 +78,9 @@ export function FrameworkTabs({ nsaControls, owaspControls }: FrameworkTabsProps
             {owaspControls.map((control) => (
               <div key={control.id} className="flex items-center gap-3 rounded-md bg-white/5 px-3 py-2">
                 {control.passed ? (
-                  <CheckCircle2 className="size-4 text-emerald-400 shrink-0" />
+                  <CheckCircle2 className="size-4 text-secure shrink-0" />
                 ) : (
-                  <span className="size-4 flex items-center justify-center text-red-400 shrink-0 text-xs">✕</span>
+                  <span className="size-4 flex items-center justify-center text-threat shrink-0 text-xs">✕</span>
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-slate-300">{control.label}</p>
@@ -90,7 +90,7 @@ export function FrameworkTabs({ nsaControls, owaspControls }: FrameworkTabsProps
                   variant="outline"
                   className={cn(
                     "text-[9px] shrink-0",
-                    control.passed ? "border-emerald-500/30 text-emerald-400" : "border-red-500/30 text-red-400",
+                    control.passed ? "border-secure/30 text-secure" : "border-threat/30 text-threat",
                   )}
                 >
                   {control.passed ? "Pass" : "Fail"}

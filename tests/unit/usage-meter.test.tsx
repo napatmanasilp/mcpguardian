@@ -29,7 +29,7 @@ describe("UsageMeter", () => {
     const { container } = render(
       <UsageMeter label="Scans" used={50} allowance={100} />
     );
-    const bar = container.querySelector(".bg-blue-500");
+    const bar = container.querySelector(".bg-monitor");
     expect(bar).not.toBeNull();
   });
 
@@ -37,7 +37,7 @@ describe("UsageMeter", () => {
     const { container } = render(
       <UsageMeter label="Scans" used={85} allowance={100} />
     );
-    const bar = container.querySelector(".bg-amber-500");
+    const bar = container.querySelector(".bg-caution");
     expect(bar).not.toBeNull();
   });
 
@@ -45,7 +45,7 @@ describe("UsageMeter", () => {
     const { container } = render(
       <UsageMeter label="Scans" used={100} allowance={100} />
     );
-    const bar = container.querySelector(".bg-red-500");
+    const bar = container.querySelector(".bg-threat");
     expect(bar).not.toBeNull();
   });
 
@@ -53,7 +53,7 @@ describe("UsageMeter", () => {
     const { container } = render(
       <UsageMeter label="Scans" used={150} allowance={100} />
     );
-    const bar = container.querySelector(".bg-red-500");
+    const bar = container.querySelector(".bg-threat");
     expect(bar).not.toBeNull();
   });
 
@@ -74,11 +74,11 @@ describe("UsageMeter", () => {
   });
 
   it("uses custom warningThreshold", () => {
-    // With threshold 0.5, 60% should show amber
+    // With threshold 0.5, 60% should show caution
     const { container } = render(
       <UsageMeter label="Scans" used={60} allowance={100} warningThreshold={0.5} />
     );
-    const bar = container.querySelector(".bg-amber-500");
+    const bar = container.querySelector(".bg-caution");
     expect(bar).not.toBeNull();
   });
 
@@ -86,7 +86,7 @@ describe("UsageMeter", () => {
     const { container } = render(
       <UsageMeter label="Scans" used={200} allowance={100} />
     );
-    const bar = container.querySelector("[class*='bg-red']") as HTMLElement;
+    const bar = container.querySelector("[class*='bg-threat']") as HTMLElement;
     expect(bar).not.toBeNull();
     expect(bar!.style.width).toBe("100%");
   });
@@ -95,7 +95,7 @@ describe("UsageMeter", () => {
     const { container } = render(
       <UsageMeter label="Scans" used={500} allowance={null} />
     );
-    const bar = container.querySelector("[class*='bg-blue']") as HTMLElement;
+    const bar = container.querySelector("[class*='bg-monitor']") as HTMLElement;
     expect(bar).not.toBeNull();
     expect(bar!.style.width).toBe("0%");
   });

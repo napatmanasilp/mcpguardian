@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect } from "react";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { GitHubIcon } from "@/components/icons/github-icon";
@@ -66,6 +67,8 @@ export const LoginForm = ({ redirectTo }: LoginFormProps) => {
             placeholder="you@example.com"
             autoComplete="email"
             required
+            defaultValue={state.values?.email ?? ""}
+            key={state.values?.email ?? "email-field"}
           />
         </div>
 
@@ -81,7 +84,8 @@ export const LoginForm = ({ redirectTo }: LoginFormProps) => {
           <Link href="/forgot-password" className="text-xs text-slate-400 hover:underline mt-1 block text-right">Forgot password?</Link>
         </div>
 
-        <Button type="submit" className="w-full" disabled={isPending}>
+        <Button type="submit" className="w-full gap-1.5" disabled={isPending}>
+          {isPending && <Loader2 className="size-4 animate-spin" />}
           {isPending ? "Signing in..." : "Sign in"}
         </Button>
       </form>

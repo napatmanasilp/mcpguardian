@@ -36,9 +36,9 @@ export function EventRow({ event }: EventRowProps) {
         className={cn(
           "size-8 rounded-full flex items-center justify-center shrink-0 mt-0.5",
           event.severity === "critical"
-            ? "bg-red-500/20"
+            ? "bg-threat/20"
             : event.severity === "high"
-              ? "bg-amber-500/20"
+              ? "bg-caution/20"
               : "bg-slate-500/20"
         )}
       >
@@ -46,14 +46,14 @@ export function EventRow({ event }: EventRowProps) {
           <ShieldAlert
             className={cn(
               "size-4",
-              event.severity === "critical" ? "text-red-400" : "text-amber-400"
+              event.severity === "critical" ? "text-threat" : "text-caution"
             )}
           />
         ) : (
           <AlertTriangle
             className={cn(
               "size-4",
-              event.severity === "critical" ? "text-red-400" : "text-amber-400"
+              event.severity === "critical" ? "text-threat" : "text-caution"
             )}
           />
         )}
@@ -79,11 +79,11 @@ export function EventRow({ event }: EventRowProps) {
   );
 
   const sharedClassName = cn(
-    "flex items-start gap-3 rounded-lg border px-4 py-3 transition-all duration-150 hover:-translate-y-px",
+    "flex items-start gap-3 rounded-lg border px-3 py-3 md:px-4 transition-all duration-150 hover:-translate-y-px",
     event.severity === "critical"
-      ? "border-red-500/20 bg-red-500/5 hover:bg-red-500/8"
+      ? "border-threat/20 bg-threat/5 hover:bg-threat/8"
       : event.severity === "high"
-        ? "border-amber-500/20 bg-amber-500/5 hover:bg-amber-500/8"
+        ? "border-caution/20 bg-caution/5 hover:bg-caution/8"
         : "border-white/10 bg-white/5 hover:bg-white/[0.07]"
   );
 

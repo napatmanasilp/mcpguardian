@@ -17,6 +17,8 @@ const protectedRoutes = [
   "/onboarding",
 ];
 
+const authRoutes = ["/login", "/signup", "/forgot-password"];
+
 export const middleware = async (request: NextRequest) => {
   const supabaseResponse = NextResponse.next({ request });
 
@@ -24,6 +26,21 @@ export const middleware = async (request: NextRequest) => {
   const isProtected = protectedRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
+  const isAuthRoute = authRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+
+  // Bail early if Supabase env vars are missing (e.g. during preview builds
+  // without env configured). This prevents MIDDLEWARE_INVOCATION_FAILED.
+  let supabaseUrl: string;
+  let supabaseAnonKey: string;
+  try {
+    supabaseUrl = getSupabaseUrl();
+    supabaseAnonKey = getSupabaseAnonKey();
+  } catch {
+    // Env vars not available — skip auth checks, let the request through
+    return supabaseResponse;
+  }
 
   // ── Authenticate via Supabase SSR client ─────────────────────────
   // Use the standard Supabase server client instead of manually parsing
@@ -32,8 +49,8 @@ export const middleware = async (request: NextRequest) => {
   // needed), preventing redirect loops when cookie state and actual
   // Supabase session state diverge (e.g. stale/expired JWTs).
   const supabase = createServerClient(
-    getSupabaseUrl(),
-    getSupabaseAnonKey(),
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -64,6 +81,11 @@ export const middleware = async (request: NextRequest) => {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Redirect authenticated users away from auth routes to dashboard
+  if (isAuthRoute && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Note: Org membership check is NOT performed in middleware.

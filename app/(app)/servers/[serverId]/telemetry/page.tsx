@@ -82,7 +82,7 @@ const ServerTelemetryPage = async ({
           <div className="grid gap-4 sm:grid-cols-4">
             <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
               <CardContent className="p-4 text-center">
-                <p className="text-lg font-bold font-mono text-emerald-400">
+                <p className="text-lg font-bold font-mono text-secure">
                   {healthMetrics.filter((h) => h.is_reachable).length}/{healthMetrics.length}
                 </p>
                 <p className="text-[10px] text-slate-500">Reachability</p>
@@ -100,7 +100,7 @@ const ServerTelemetryPage = async ({
             </Card>
             <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
               <CardContent className="p-4 text-center">
-                <p className="text-lg font-bold font-mono text-amber-400">
+                <p className="text-lg font-bold font-mono text-caution">
                   {healthMetrics.length > 0
                     ? `${(healthMetrics.reduce((s, h) => s + (h.error_rate_pct ?? 0), 0) / healthMetrics.length).toFixed(1)}%`
                     : "—"}
@@ -110,7 +110,7 @@ const ServerTelemetryPage = async ({
             </Card>
             <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
               <CardContent className="p-4 text-center">
-                <p className="text-lg font-bold font-mono text-red-400">
+                <p className="text-lg font-bold font-mono text-threat">
                   {recentInvocs?.filter((i) => i.was_blocked).length ?? 0}
                 </p>
                 <p className="text-[10px] text-slate-500">Blocked Calls</p>
@@ -122,14 +122,14 @@ const ServerTelemetryPage = async ({
           <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-slate-400 flex items-center gap-2">
-                <Activity className="size-4 text-blue-400" />
+                <Activity className="size-4 text-monitor" />
                 Health Timeline (last {healthMetrics.length} checks)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-1 max-h-80 overflow-y-auto">
               {healthMetrics.map((h, i) => (
                 <div key={i} className="flex items-center gap-3 py-1 text-xs border-b border-white/5 last:border-0">
-                  <div className={cn("size-2 rounded-full shrink-0", h.is_reachable ? "bg-emerald-500" : "bg-red-500")} />
+                  <div className={cn("size-2 rounded-full shrink-0", h.is_reachable ? "bg-secure" : "bg-threat")} />
                   <span className="font-mono text-slate-400 w-20">{h.latency_ms != null ? `${h.latency_ms}ms` : "—"}</span>
                   <span className="text-slate-500 w-16">{h.error_rate_pct != null ? `${h.error_rate_pct}%` : "—"}</span>
                   <span className="text-slate-500 w-20">{h.tool_call_rate_per_minute != null ? `${h.tool_call_rate_per_minute}/min` : "—"}</span>
@@ -156,7 +156,7 @@ const ServerTelemetryPage = async ({
               <div key={i} className="flex items-center gap-3 rounded-md bg-white/5 px-3 py-2 text-xs">
                 <div className={cn(
                   "size-2 rounded-full shrink-0",
-                  inv.was_blocked ? "bg-red-500" : inv.threat_type ? "bg-amber-500" : "bg-emerald-500",
+                  inv.was_blocked ? "bg-threat" : inv.threat_type ? "bg-caution" : "bg-secure",
                 )} />
                 <span className="font-mono text-slate-300 truncate flex-1">{inv.tool_name}</span>
                 {inv.threat_type && <Badge variant="destructive" className="text-[9px]">{inv.threat_type}</Badge>}

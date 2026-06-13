@@ -2,14 +2,28 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Loader2, ScanSearch } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { DynamicErrorBoundary } from "@/components/ui/dynamic-error-boundary";
 import { Textarea } from "@/components/ui/textarea";
-import { ScanResults } from "@/components/scan-results";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import type { ScanResult } from "@/lib/scanner/types";
+
+// Code-split: ScanResults is a very large client component (500+ lines).
+// Requirement 20.1: code-split client components > 50 KB not needed on initial render
+const ScanResults = dynamic(
+  () => import("@/components/scan-results").then((mod) => mod.ScanResults),
+  {
+    ssr: false,
+    loading: () => (
+      <PageSkeleton blocks={[{ type: "chart", height: "16rem" }, { type: "table", height: "12rem" }]} />
+    ),
+  },
+);
 
 const SAMPLE_CONFIG = `{
   "mcpServers": {
@@ -109,7 +123,9 @@ export const ScanConfigForm = ({ isAuthenticated }: ScanConfigFormProps) => {
 
       {result && (
         <>
-          <ScanResults result={result} />
+          <DynamicErrorBoundary componentName="Scan Results">
+            <ScanResults result={result} />
+          </DynamicErrorBoundary>
 
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="flex flex-col items-center gap-4 py-6 text-center">

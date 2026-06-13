@@ -3,6 +3,8 @@ import { z } from "zod";
 import { createServiceClient } from "@/lib/supabase/service";
 import { clearCveCache } from "@/lib/scanner/cve-loader";
 
+export const dynamic = "force-dynamic";
+
 function checkAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
   const cronHeader = request.headers.get("x-cron-secret");
