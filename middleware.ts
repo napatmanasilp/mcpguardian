@@ -30,13 +30,12 @@ export const middleware = async (request: NextRequest) => {
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 
-  // Skip auth check entirely for routes that don't need it (marketing pages, etc.)
+  // Skip auth check entirely for routes that don't need it (safety net)
   if (!isProtected && !isAuthRoute) {
     return supabaseResponse;
   }
 
-  // Bail early if Supabase env vars are missing (e.g. during preview builds
-  // without env configured). This prevents MIDDLEWARE_INVOCATION_FAILED.
+  // Bail early if Supabase env vars are missing
   let supabaseUrl: string;
   let supabaseAnonKey: string;
   try {
@@ -99,6 +98,17 @@ export const middleware = async (request: NextRequest) => {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/).*)",
+    "/dashboard/:path*",
+    "/servers/:path*",
+    "/sessions/:path*",
+    "/activity/:path*",
+    "/alerts/:path*",
+    "/compliance/:path*",
+    "/settings/:path*",
+    "/telemetry/:path*",
+    "/onboarding/:path*",
+    "/login",
+    "/signup",
+    "/forgot-password",
   ],
 };
