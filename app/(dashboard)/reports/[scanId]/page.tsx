@@ -57,9 +57,9 @@ function formatDate(dateStr: string) {
 const ReportDetailPage = async ({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ scanId: string }>;
 }) => {
-  const { id } = await params;
+  const { scanId: id } = await params;
 
   const supabase = await createClient();
   const {
