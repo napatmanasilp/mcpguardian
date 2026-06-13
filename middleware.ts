@@ -30,6 +30,11 @@ export const middleware = async (request: NextRequest) => {
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 
+  // Skip auth check entirely for routes that don't need it (marketing pages, etc.)
+  if (!isProtected && !isAuthRoute) {
+    return supabaseResponse;
+  }
+
   // Bail early if Supabase env vars are missing (e.g. during preview builds
   // without env configured). This prevents MIDDLEWARE_INVOCATION_FAILED.
   let supabaseUrl: string;
@@ -43,11 +48,6 @@ export const middleware = async (request: NextRequest) => {
   }
 
   // ── Authenticate via Supabase SSR client ─────────────────────────
-  // Use the standard Supabase server client instead of manually parsing
-  // the auth cookie. This ensures accurate auth state by actually
-  // verifying the session with the Supabase API (refreshing it if
-  // needed), preventing redirect loops when cookie state and actual
-  // Supabase session state diverge (e.g. stale/expired JWTs).
   const supabase = createServerClient(
     supabaseUrl,
     supabaseAnonKey,
