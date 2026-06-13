@@ -7,6 +7,22 @@
     {
       "path": "/api/cron/sync-cves",
       "schedule": "0 6 * * 1"
+    },
+    {
+      "path": "/api/cron/reset-checks",
+      "schedule": "0 0 1 * *"
+    },
+    {
+      "path": "/api/cron/usage-reset",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/watchdog",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/server-health",
+      "schedule": "0 8 * * *"
     }
   ]
 }

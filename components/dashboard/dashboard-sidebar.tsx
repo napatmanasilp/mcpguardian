@@ -31,7 +31,7 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "MONITOR",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/activity", label: "Activity", icon: Radar },
+      { href: "/activity", label: "Threat Log", icon: Radar },
       { href: "/alerts", label: "Alerts", icon: Bell },
       { href: "/telemetry", label: "Telemetry", icon: FileText },
     ],

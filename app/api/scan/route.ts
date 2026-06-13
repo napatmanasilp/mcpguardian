@@ -201,23 +201,34 @@ export const POST = async (request: NextRequest) => {
     // ── Save scan to DB (now includes allowlist findings) ────────────
     let scanResultId: string | undefined;
 
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    // For API-key-authenticated requests `userId` is already set above.
+    // Only fall back to session auth when apiKeyId is null (browser session path).
+    let dbUserId: string | null = apiKeyId ? userId : null;
 
-    if (user) {
+    if (!dbUserId) {
+      const supabase = await createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) dbUserId = user.id;
+    }
+
+    if (dbUserId) {
+      // Use the anon Supabase client only for the session-auth path since RLS
+      // requires the user's JWT. For API-key paths we use the service client
+      // (already created as `svc` above) to bypass RLS.
+      const supabase = apiKeyId ? svc : await createClient();
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("plan, scans_this_month, max_scans, checks_purchased")
-        .eq("id", user.id)
+        .eq("id", dbUserId)
         .single();
       let profile = profileData;
 
       if (profileError && profileError.code === "PGRST116") {
         const { error: createError } = await svc.from("profiles").insert({
-          id: user.id,
-          email: user.email ?? "",
+          id: dbUserId,
+          email: "",
         });
         if (createError) {
           console.error("Failed to create profile:", createError);
@@ -265,7 +276,7 @@ export const POST = async (request: NextRequest) => {
       const { data: insertedScan, error: insertError } = await supabase
         .from("scan_results")
         .insert({
-          user_id: user.id,
+          user_id: dbUserId,
           overall_grade: scanResult.grade,
           overall_score: scanResult.score,
           servers_scanned: scanResult.serversScanned,
@@ -291,7 +302,7 @@ export const POST = async (request: NextRequest) => {
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ scans_this_month: (profile?.scans_this_month || 0) + 1 })
-        .eq("id", user.id);
+        .eq("id", dbUserId);
 
       if (updateError) {
         console.error("Failed to increment scan count:", updateError);

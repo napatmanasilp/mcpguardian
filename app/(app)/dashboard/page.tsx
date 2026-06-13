@@ -19,6 +19,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { ThreatFeedSection } from "@/components/dashboard/threat-feed-section";
 import { WelcomeCard } from "@/components/dashboard/welcome-card";
+import { QuickActionsBar } from "@/components/dashboard/quick-actions-bar";
+import { NSAComplianceTeaser } from "@/components/dashboard/nsa-compliance-teaser";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
@@ -132,7 +134,7 @@ const DashboardPage = async () => {
         {threatCount > 0 && (
           <>
             <span className="text-slate-600">·</span>
-            <span className="text-amber-400">{threatCount} active threat{threatCount !== 1 ? "s" : ""}</span>
+            <Link href="/alerts?severity=critical" className="text-amber-400 hover:underline">{threatCount} active threat{threatCount !== 1 ? "s" : ""}</Link>
           </>
         )}
         <span className="text-slate-600">·</span>
@@ -147,6 +149,9 @@ const DashboardPage = async () => {
           )}
         </div>
       </div>
+
+      {/* ── Quick Actions Bar ──────────────────────────────────────────── */}
+      <QuickActionsBar mostRecentServerId={servers?.[0]?.id ?? null} />
 
       {/* ── Two-Column KPI Layout ──────────────────────────────────────── */}          <div className="relative grid gap-6 grid-cols-2 lg:grid-cols-2">
         {/* Vertical divider */}
@@ -289,6 +294,9 @@ const DashboardPage = async () => {
           </CardContent>
         </Card>
       )}
+
+      {/* ── NSA Compliance Teaser (free plans) ─────────────────────────── */}
+      {!isPaidPlan && <NSAComplianceTeaser />}
 
       {/* ── Live Threat Feed ────────────────────────────────────────────── */}
       {recentThreats && recentThreats.length > 0 && (

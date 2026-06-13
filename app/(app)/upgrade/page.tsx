@@ -10,36 +10,38 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { FeatureComparisonTable } from "@/components/upgrade/feature-comparison-table";
+import { SocialProofSection } from "@/components/upgrade/social-proof-section";
 import { cn } from "@/lib/utils";
+import {
+  TIER_CATALOG,
+  TierDefinition,
+  TierId,
+  VALID_TIER_IDS,
+  getDisplayPrice,
+  getAnnualTotalCents,
+  isUnlimited,
+} from "@/lib/tier-catalog";
 
-interface PlanCard {
-  name: string;
+interface PlanCardMeta {
+  tierId: TierId;
   subtitle: string;
-  priceMonthly: number;
-  priceAnnual: number;
-  scans: string;
-  toolCalls: string;
-  seats: string;
-  servers: string;
   features: string[];
   notIncluded: string[];
   overageScan: string;
   overageToolCall: string;
   popular?: boolean;
   ctatext: string;
-  priceId?: string;
 }
 
-const PLANS: PlanCard[] = [
+/**
+ * Static metadata per tier that isn't part of the tier catalog
+ * (features, subtitles, overage rates, CTA text).
+ */
+const PLAN_META: PlanCardMeta[] = [
   {
-    name: "Free",
+    tierId: "free",
     subtitle: "For individual evaluation",
-    priceMonthly: 0,
-    priceAnnual: 0,
-    scans: "50 scans/month",
-    toolCalls: "Not included",
-    seats: "1 seat",
-    servers: "1 MCP server",
     features: [
       "Static config analysis",
       "OWASP MCP Top 10 checks",
@@ -57,14 +59,8 @@ const PLANS: PlanCard[] = [
     ctatext: "Start Free — No Card Required",
   },
   {
-    name: "Developer",
+    tierId: "developer",
     subtitle: "For individual developers",
-    priceMonthly: 29,
-    priceAnnual: 290,
-    scans: "100 scans/month",
-    toolCalls: "25,000 tool calls/month",
-    seats: "3 seats",
-    servers: "5 MCP servers",
     features: [
       "Everything in Free",
       "Runtime proxy protection",
@@ -84,14 +80,8 @@ const PLANS: PlanCard[] = [
     ctatext: "Start Developer",
   },
   {
-    name: "Team",
+    tierId: "team",
     subtitle: "For small teams",
-    priceMonthly: 99,
-    priceAnnual: 990,
-    scans: "500 scans/month",
-    toolCalls: "100,000 tool calls/month",
-    seats: "10 seats",
-    servers: "25 MCP servers",
     features: [
       "Everything in Developer",
       "Team collaboration",
@@ -108,14 +98,8 @@ const PLANS: PlanCard[] = [
     ctatext: "Start Team",
   },
   {
-    name: "Startup",
+    tierId: "startup",
     subtitle: "For growing companies",
-    priceMonthly: 299,
-    priceAnnual: 2990,
-    scans: "2,000 scans/month",
-    toolCalls: "500,000 tool calls/month",
-    seats: "Unlimited",
-    servers: "100 MCP servers",
     features: [
       "Everything in Team",
       "Unlimited seats",
@@ -133,14 +117,8 @@ const PLANS: PlanCard[] = [
     ctatext: "Start Startup",
   },
   {
-    name: "Enterprise",
+    tierId: "enterprise",
     subtitle: "For large organizations",
-    priceMonthly: -1,
-    priceAnnual: -1,
-    scans: "Unlimited",
-    toolCalls: "Unlimited",
-    seats: "Unlimited",
-    servers: "Unlimited",
     features: [
       "Everything in Startup",
       "Custom SLA",
@@ -157,37 +135,51 @@ const PLANS: PlanCard[] = [
   },
 ];
 
+function formatAllowance(value: number | null, label: string): string {
+  if (isUnlimited(value)) return "Unlimited";
+  return `${value!.toLocaleString()} ${label}`;
+}
+
+function formatSeats(tier: TierDefinition): string {
+  if (isUnlimited(tier.seatLimit)) return "Unlimited";
+  return `${tier.seatLimit} seat${tier.seatLimit !== 1 ? "s" : ""}`;
+}
+
+function formatServers(tier: TierDefinition): string {
+  if (isUnlimited(tier.mcpServerLimit)) return "Unlimited";
+  return `${tier.mcpServerLimit} MCP server${tier.mcpServerLimit !== 1 ? "s" : ""}`;
+}
+
 export default function UpgradePage() {
   const router = useRouter();
   const [annual, setAnnual] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
 
-  const handleSelectPlan = async (plan: PlanCard) => {
-    if (plan.name === "Enterprise") {
-      window.location.href = "mailto:sales@mcpguardian.dev";
+  const handleSelectPlan = async (tierId: TierId) => {
+    if (tierId === "enterprise") {
+      router.push("/contact");
       return;
     }
-    if (plan.priceMonthly === 0) {
-      // Free plan — redirect to onboarding
+    if (tierId === "free") {
       router.push("/onboarding");
       return;
     }
 
-    setLoading(plan.name);
+    setLoading(tierId);
     try {
-      const res = await fetch("/api/billing/checkout", {
+      const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          planId: plan.name.toLowerCase(),
-          billingCycle: annual ? "annual" : "monthly",
+          plan: tierId,
+          billing: annual ? "annual" : "monthly",
         }),
       });
 
       if (!res.ok) throw new Error("Failed to create checkout");
       const data = await res.json();
-      if (data.checkoutUrl) {
-        window.location.href = data.checkoutUrl;
+      if (data.url) {
+        window.location.href = data.url;
       }
     } catch (err) {
       console.error(err);
@@ -232,94 +224,121 @@ export default function UpgradePage() {
         </span>
       </div>
 
+      {/* Social Proof */}
+      <SocialProofSection />
+
       {/* Pricing Cards */}
       <div className="grid gap-4 lg:grid-cols-5 max-w-6xl mx-auto w-full">
-        {PLANS.map((plan) => (
-          <Card
-            key={plan.name}
-            className={cn(
-              "border-white/10 bg-[hsl(222,47%,6%)] relative flex flex-col",
-              plan.popular && "ring-1 ring-blue-500",
-              plan.name === "Enterprise" && "bg-gradient-to-b from-blue-500/10 to-[hsl(222,47%,6%)] border-blue-500/30",
-            )}
-          >
-            {plan.popular && (
-              <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
-                <Badge className="bg-blue-500 text-white text-[9px] px-2">Most Popular</Badge>
-              </div>
-            )}
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">{plan.name}</CardTitle>
-              <p className="text-[10px] text-slate-500">{plan.subtitle}</p>
-              <div className="mt-2">
-                {plan.priceMonthly === -1 ? (
-                  <p className="text-lg font-bold">Custom</p>
-                ) : plan.priceMonthly === 0 ? (
-                  <p className="text-lg font-bold">Free</p>
-                ) : (
-                  <>
-                    <p className="text-2xl font-bold">
-                      ${annual ? Math.round(plan.priceAnnual / 12) : plan.priceMonthly}
-                      <span className="text-sm font-normal text-slate-400">/mo</span>
-                    </p>
-                    {annual && (
-                      <p className="text-[10px] text-slate-500">${plan.priceAnnual}/year (save ${plan.priceMonthly * 12 - plan.priceAnnual})</p>
-                    )}
-                  </>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col gap-4">
-              <div className="space-y-1 text-xs text-slate-400">
-                <p>{plan.scans}</p>
-                <p>{plan.toolCalls}</p>
-                <p>{plan.seats}</p>
-                <p>{plan.servers}</p>
-              </div>
+        {PLAN_META.map((meta) => {
+          const tier = TIER_CATALOG[meta.tierId];
+          const cycle = annual ? "annual" : "monthly";
+          const displayPrice = getDisplayPrice(tier, cycle as "monthly" | "annual");
+          const isCustom = tier.monthlyPriceCents === -1;
+          const isFree = tier.monthlyPriceCents === 0;
+          const isPaid = !isCustom && !isFree;
 
-              <Separator className="bg-white/5" />
+          // Annual total = 12x the annual rate
+          const annualTotalCents = getAnnualTotalCents(tier);
+          const annualTotalDollars = annualTotalCents > 0 ? annualTotalCents / 100 : 0;
+          const monthlyTotalForYear = tier.monthlyPriceCents > 0 ? (tier.monthlyPriceCents * 12) / 100 : 0;
+          const annualSavings = monthlyTotalForYear - annualTotalDollars;
 
-              <div className="flex-1 space-y-2">
-                {plan.features.map((f) => (
-                  <div key={f} className="flex items-start gap-2 text-xs">
-                    <Check className="size-3.5 text-emerald-400 shrink-0 mt-0.5" />
-                    <span className="text-slate-300">{f}</span>
-                  </div>
-                ))}
-                {plan.notIncluded.map((f) => (
-                  <div key={f} className="flex items-start gap-2 text-xs">
-                    <Minus className="size-3.5 text-slate-600 shrink-0 mt-0.5" />
-                    <span className="text-slate-600">{f}</span>
-                  </div>
-                ))}
-              </div>
-
-              {plan.overageScan !== "—" && (
-                <p className="text-[10px] text-slate-500">
-                  {plan.overageScan} · {plan.overageToolCall}
-                </p>
+          return (
+            <Card
+              key={meta.tierId}
+              className={cn(
+                "border-white/10 bg-[hsl(222,47%,6%)] relative flex flex-col",
+                meta.popular && "ring-1 ring-blue-500",
+                meta.tierId === "enterprise" && "bg-gradient-to-b from-blue-500/10 to-[hsl(222,47%,6%)] border-blue-500/30",
               )}
+            >
+              {meta.popular && (
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
+                  <Badge className="bg-blue-500 text-white text-[9px] px-2">Most Popular</Badge>
+                </div>
+              )}
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">{tier.displayName}</CardTitle>
+                <p className="text-[10px] text-slate-500">{meta.subtitle}</p>
+                <div className="mt-2">
+                  {isCustom ? (
+                    <p className="text-lg font-bold">Custom</p>
+                  ) : isFree ? (
+                    <p className="text-lg font-bold">Free</p>
+                  ) : (
+                    <>
+                      <p className="text-2xl font-bold">
+                        {displayPrice}
+                        <span className="text-sm font-normal text-slate-400">/mo</span>
+                      </p>
+                      {annual && (
+                        <p className="text-[10px] text-slate-500">
+                          ${annualTotalDollars}/year (save ${annualSavings})
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 flex flex-col gap-4">
+                <div className="space-y-1 text-xs text-slate-400">
+                  <p>{formatAllowance(tier.scanAllowance, "scans/month")}</p>
+                  <p>
+                    {tier.id === "free" && tier.toolCallAllowance !== null
+                      ? `${tier.toolCallAllowance.toLocaleString()} tool calls/month`
+                      : formatAllowance(tier.toolCallAllowance, "tool calls/month")}
+                  </p>
+                  <p>{formatSeats(tier)}</p>
+                  <p>{formatServers(tier)}</p>
+                </div>
 
-              <Button
-                className={cn(
-                  "w-full gap-2 mt-auto",
-                  plan.name === "Enterprise" && "bg-blue-600 hover:bg-blue-700",
-                  plan.popular && !plan.name.includes("Enterprise") && "bg-blue-500 hover:bg-blue-600",
+                <Separator className="bg-white/5" />
+
+                <div className="flex-1 space-y-2">
+                  {meta.features.map((f) => (
+                    <div key={f} className="flex items-start gap-2 text-xs">
+                      <Check className="size-3.5 text-emerald-400 shrink-0 mt-0.5" />
+                      <span className="text-slate-300">{f}</span>
+                    </div>
+                  ))}
+                  {meta.notIncluded.map((f) => (
+                    <div key={f} className="flex items-start gap-2 text-xs">
+                      <Minus className="size-3.5 text-slate-600 shrink-0 mt-0.5" />
+                      <span className="text-slate-600">{f}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {meta.overageScan !== "—" && (
+                  <p className="text-[10px] text-slate-500">
+                    {meta.overageScan} · {meta.overageToolCall}
+                  </p>
                 )}
-                variant={plan.popular ? "default" : "outline"}
-                disabled={loading === plan.name}
-                onClick={() => handleSelectPlan(plan)}
-              >
-                {loading === plan.name ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  plan.ctatext
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-        ))}
+
+                <Button
+                  className={cn(
+                    "w-full gap-2 mt-auto",
+                    meta.tierId === "enterprise" && "bg-blue-600 hover:bg-blue-700",
+                    meta.popular && meta.tierId !== "enterprise" && "bg-blue-500 hover:bg-blue-600",
+                  )}
+                  variant={meta.popular ? "default" : "outline"}
+                  disabled={loading === meta.tierId}
+                  onClick={() => handleSelectPlan(meta.tierId)}
+                >
+                  {loading === meta.tierId ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    meta.ctatext
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
+
+      {/* Feature Comparison Table */}
+      <FeatureComparisonTable />
 
       {/* Add-Ons Grid */}
       <div>

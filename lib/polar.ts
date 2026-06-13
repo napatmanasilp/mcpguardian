@@ -1,11 +1,5 @@
 import { Polar } from "@polar-sh/sdk";
 
-if (!process.env.POLAR_ACCESS_TOKEN) {
-  throw new Error(
-    "POLAR_ACCESS_TOKEN environment variable is required for Polar.sh billing.",
-  );
-}
-
 /**
  * Polar.sh SDK client.
  *
@@ -24,8 +18,31 @@ if (!process.env.POLAR_ACCESS_TOKEN) {
  *   Stripe Invoice          → Polar Order or Subscription Invoice
  *   Stripe Metered Billing  → Polar Meters
  */
-export const polar = new Polar({
-  accessToken: process.env.POLAR_ACCESS_TOKEN,
-  server:
-    process.env.POLAR_ENV === "sandbox" ? "sandbox" : "production",
+
+// Lazy-initialize the Polar client to avoid throwing at module load time
+// when POLAR_ACCESS_TOKEN is not set (e.g. during build or on routes that
+// don't use billing).
+let _polar: Polar | null = null;
+
+export function getPolarClient(): Polar {
+  if (!process.env.POLAR_ACCESS_TOKEN) {
+    throw new Error(
+      "POLAR_ACCESS_TOKEN environment variable is required for Polar.sh billing.",
+    );
+  }
+  if (!_polar) {
+    _polar = new Polar({
+      accessToken: process.env.POLAR_ACCESS_TOKEN,
+      server: process.env.POLAR_ENV === "sandbox" ? "sandbox" : "production",
+    });
+  }
+  return _polar;
+}
+
+// Keep the named `polar` export for any existing imports, but now it's
+// a getter-based proxy so it doesn't throw at import time.
+export const polar = new Proxy({} as Polar, {
+  get(_target, prop) {
+    return (getPolarClient() as unknown as Record<string | symbol, unknown>)[prop];
+  },
 });

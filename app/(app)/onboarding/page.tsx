@@ -133,6 +133,7 @@ export default function OnboardingPage() {
   const handleCreate = useCallback(async () => {
     if (!canSubmit) return;
     setIsCreating(true);
+    setScanError(null);
     setStep("scanning");
     setScanProgress(0);
 
@@ -241,7 +242,7 @@ export default function OnboardingPage() {
       <div className="flex min-h-screen items-center justify-center p-6">
         <Card className="w-full max-w-lg border-white/10 bg-bg-base">
           <CardHeader className="text-center">
-            <OnboardingSteps currentStep={step === "scanning" ? 1 : 2} />
+            <OnboardingSteps currentStep={1} />
             <div className="mx-auto mb-4">
               <ShieldLogo className="size-12" />
             </div>
@@ -519,6 +520,10 @@ export default function OnboardingPage() {
                 className="border-white/10 bg-white/5"
               />
             </div>
+          )}
+
+          {scanError && (
+            <p className="text-sm text-red-400 text-center">{scanError}</p>
           )}
 
           <Button

@@ -78,6 +78,7 @@ export const LoginForm = ({ redirectTo }: LoginFormProps) => {
             autoComplete="current-password"
             required
           />
+          <Link href="/forgot-password" className="text-xs text-slate-400 hover:underline mt-1 block text-right">Forgot password?</Link>
         </div>
 
         <Button type="submit" className="w-full" disabled={isPending}>

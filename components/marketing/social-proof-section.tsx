@@ -56,18 +56,23 @@ export const SocialProofSection = () => {
     {
       value: stats?.scans ?? 0,
       label: "MCP servers scanned",
+      floor: 0,
     },
     {
       value: stats?.rugPulls ?? 0,
       label: "Rug pulls detected",
+      floor: 0,
     },
     {
-      value: stats?.cves ?? 0,
+      // CVEs are seeded — always show at least 26
+      value: Math.max(stats?.cves ?? 0, 26),
       label: "CVEs tracked",
+      floor: 26,
     },
     {
       value: stats?.monitors ?? 0,
       label: "Configs monitored",
+      floor: 0,
     },
   ];
 

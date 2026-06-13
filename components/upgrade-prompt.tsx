@@ -49,18 +49,18 @@ export function UpgradePrompt({
   const handleUpgrade = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/billing/checkout", {
+      const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ plan: requiredPlan, billingCycle: "monthly" }),
+        body: JSON.stringify({ plan: requiredPlan, billing: "monthly" }),
       });
 
       if (!res.ok) throw new Error("Failed to create checkout session");
 
       const data = await res.json();
-      if (data.checkoutUrl) {
+      if (data.url) {
         onUpgrade?.();
-        window.location.href = data.checkoutUrl;
+        window.location.href = data.url;
       }
     } catch (err) {
       console.error("Upgrade failed:", err);

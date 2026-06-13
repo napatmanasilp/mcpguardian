@@ -1,9 +1,17 @@
+/**
+ * @deprecated This module is deprecated in favor of `lib/tier-catalog.ts`.
+ * Scan and tool-call limits should be sourced from the TIER_CATALOG constant.
+ * Feature gating logic (hasFeature, FEATURE_MATRIX, etc.) is still valid here
+ * but will be migrated in a future release.
+ */
+
 // ─── Feature Gates ──────────────────────────────────────────────────────
 // Single source of truth for feature entitlement checks.
 // Features map to plans table columns (via PLAN_GATES) for consistent
 // enforcement across API routes, UI components, and background jobs.
 
 import { type Plan, PLAN_PRICES } from "@/lib/plan-limits";
+import { TIER_CATALOG, type TierId } from "@/lib/tier-catalog";
 
 export type Feature =
   | "block_mode"
@@ -150,18 +158,12 @@ export function getFeatureUnlockInfo(
 }
 
 // ─── Plan Limit Definitions ────────────────────────────────────────────
-// Mirrors the plans table columns (scan_limit, tool_call_limit).
-
-const PLAN_LIMITS: Record<string, { scans: number | null; toolCalls: number | null }> = {
-  free: { scans: 0, toolCalls: 5000 },
-  developer: { scans: 50, toolCalls: 25000 },
-  team: { scans: 200, toolCalls: 150000 },
-  startup: { scans: 1000, toolCalls: 1000000 },
-  enterprise: { scans: null, toolCalls: null },
-};
+// Previously hardcoded here; now derived from TIER_CATALOG in lib/tier-catalog.ts.
+// getScanLimit and getToolCallLimit below read directly from TIER_CATALOG.
 
 // ─── getToolCallLimit ─────────────────────────────────────────────────
 // Returns the tool call limit for an org, or null for unlimited.
+// @deprecated Use TIER_CATALOG from lib/tier-catalog.ts directly.
 
 export interface OrganizationLike {
   plan_id?: string;
@@ -169,15 +171,20 @@ export interface OrganizationLike {
 
 export function getToolCallLimit(org: OrganizationLike): number | null {
   const plan = org.plan_id ?? "free";
-  return PLAN_LIMITS[plan]?.toolCalls ?? null;
+  const tier = TIER_CATALOG[plan as TierId];
+  if (!tier) return TIER_CATALOG.free.toolCallAllowance;
+  return tier.toolCallAllowance;
 }
 
 // ─── getScanLimit ─────────────────────────────────────────────────────
 // Returns the scan limit for an org, or null for unlimited.
+// @deprecated Use TIER_CATALOG from lib/tier-catalog.ts directly.
 
 export function getScanLimit(org: OrganizationLike): number | null {
   const plan = org.plan_id ?? "free";
-  return PLAN_LIMITS[plan]?.scans ?? null;
+  const tier = TIER_CATALOG[plan as TierId];
+  if (!tier) return TIER_CATALOG.free.scanAllowance;
+  return tier.scanAllowance;
 }
 
 // ─── isOverLimit ──────────────────────────────────────────────────────

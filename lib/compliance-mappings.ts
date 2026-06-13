@@ -480,6 +480,107 @@ export const MITRE_ATLAS_MAPPINGS: Record<string, MitreAtlasEntry> = {
   },
 };
 
+// ─── OWASP MCP Top 10 Control Definitions ────────────────────────────
+
+export interface OwaspMcpControl {
+  id: string;
+  label: string;
+  description: string;
+  passed: boolean;
+}
+
+/**
+ * Returns the OWASP MCP Top 10 control definitions (MCP01–MCP10) with a computed
+ * `passed` status. A control is considered "passed" if no issues in the provided
+ * scan results reference that OWASP MCP category.
+ *
+ * If no `triggeredOwaspIds` is provided, all controls default to `passed: true`
+ * (i.e., no findings detected).
+ */
+export function getOwaspMcpControls(triggeredOwaspIds?: Set<string>): OwaspMcpControl[] {
+  const triggered = triggeredOwaspIds ?? new Set<string>();
+
+  return [
+    {
+      id: "MCP01",
+      label: "MCP01: Credential & Secret Exposure",
+      description: "Hardcoded secrets, API keys, or credentials in MCP server configurations",
+      passed: !triggered.has("MCP01"),
+    },
+    {
+      id: "MCP02",
+      label: "MCP02: Excessive Permissions",
+      description: "Overly broad file system access or permissions granted to MCP tools",
+      passed: !triggered.has("MCP02"),
+    },
+    {
+      id: "MCP03",
+      label: "MCP03: Tool Poisoning & Injection",
+      description: "Prompt injection, tool poisoning, or preference manipulation via MCP tools",
+      passed: !triggered.has("MCP03"),
+    },
+    {
+      id: "MCP04",
+      label: "MCP04: Supply Chain Compromise",
+      description: "Vulnerable, typosquatted, or unverified MCP packages and dependencies",
+      passed: !triggered.has("MCP04"),
+    },
+    {
+      id: "MCP05",
+      label: "MCP05: Unsafe Command Execution",
+      description: "Dangerous shell commands or STDIO transport without sandboxing",
+      passed: !triggered.has("MCP05"),
+    },
+    {
+      id: "MCP06",
+      label: "MCP06: Indirect Prompt Injection",
+      description: "Chained outputs or resource content used to inject prompts indirectly",
+      passed: !triggered.has("MCP06"),
+    },
+    {
+      id: "MCP07",
+      label: "MCP07: Authentication & Transport Security",
+      description: "Missing authentication, weak auth schemes, or insecure transport configurations",
+      passed: !triggered.has("MCP07"),
+    },
+    {
+      id: "MCP08",
+      label: "MCP08: Consent & Authorization Bypass",
+      description: "Tool execution without explicit user consent or authorization checks",
+      passed: !triggered.has("MCP08"),
+    },
+    {
+      id: "MCP09",
+      label: "MCP09: Cross-Server & Integrity Risks",
+      description: "Tool shadowing, rug pulls, or cross-server manipulation attacks",
+      passed: !triggered.has("MCP09"),
+    },
+    {
+      id: "MCP10",
+      label: "MCP10: Insufficient Documentation",
+      description: "Undocumented prompts, resources, or tools lacking transparency",
+      passed: !triggered.has("MCP10"),
+    },
+  ];
+}
+
+/**
+ * Computes the set of triggered OWASP MCP IDs from scan issues.
+ * Uses the COMPLIANCE_MAP to find which OWASP MCP categories each issue type maps to.
+ */
+export function getTriggeredOwaspIds(issueTypes: string[]): Set<string> {
+  const triggered = new Set<string>();
+  for (const issueType of issueTypes) {
+    const refs = COMPLIANCE_MAP[issueType];
+    if (refs) {
+      for (const owaspId of refs.owasp_mcp) {
+        triggered.add(owaspId);
+      }
+    }
+  }
+  return triggered;
+}
+
 // ─── Enricher & Summary Builder ──────────────────────────────────────
 
 export function enrichIssuesWithCompliance<T extends { type: string }>(

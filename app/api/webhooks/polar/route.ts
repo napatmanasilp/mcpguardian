@@ -5,6 +5,13 @@ import {
 } from "@polar-sh/sdk/webhooks";
 
 import { createServiceClient } from "@/lib/supabase/service";
+import { getTier, TierId } from "@/lib/tier-catalog";
+import { resetUsageCounters } from "@/lib/usage-tracker";
+import {
+  schedulePendingDowngrade,
+  applyPendingDowngrade,
+  isDowngrade,
+} from "@/lib/subscription-manager";
 
 /**
  * POST /api/webhooks/polar
@@ -183,21 +190,111 @@ export const POST = async (request: NextRequest) => {
           return NextResponse.json({ received: true }, { status: 200 });
         }
 
-        const updateData2: Record<string, unknown> = {
-          plan_id: updatedPlanId,
-          subscription_status: getStr(eventData, "status") || "active",
-        };
         const pStart = getStr(eventData, "current_period_start");
         const pEnd = getStr(eventData, "current_period_end");
-        if (pStart) updateData2.current_period_start = pStart;
-        if (pEnd) updateData2.current_period_end = pEnd;
 
-        await supabase
+        // Fetch the org's current state for comparison
+        const { data: currentOrg } = await supabase
           .from("organizations")
-          .update(updateData2)
-          .eq("id", resolvedOrgId2);
+          .select("plan_id, current_period_start, pending_plan_id")
+          .eq("id", resolvedOrgId2)
+          .single();
 
-        console.log(`Polar webhook: updated subscription for org ${resolvedOrgId2} to plan ${updatedPlanId}`);
+        const currentPlanId = currentOrg?.plan_id ?? "free";
+        const isNewPeriod =
+          pStart && pStart !== currentOrg?.current_period_start;
+
+        // ── 1. New billing period → reset usage counters ──────────
+        if (isNewPeriod && pStart && pEnd) {
+          await resetUsageCounters(supabase, resolvedOrgId2, pStart, pEnd);
+          console.log(
+            `Polar webhook: reset usage counters for org ${resolvedOrgId2} (new period ${pStart})`
+          );
+        }
+
+        // ── 2. New period + pending downgrade → apply it ──────────
+        if (isNewPeriod && currentOrg?.pending_plan_id) {
+          await applyPendingDowngrade(supabase, resolvedOrgId2);
+          console.log(
+            `Polar webhook: applied pending downgrade for org ${resolvedOrgId2}`
+          );
+        }
+
+        // ── 3. Handle plan changes ───────────────────────────────
+        const planChanged = updatedPlanId !== currentPlanId;
+
+        if (planChanged) {
+          const validCurrentTier = getTier(currentPlanId);
+          const validTargetTier = getTier(updatedPlanId);
+
+          if (
+            validCurrentTier &&
+            validTargetTier &&
+            isDowngrade(currentPlanId as TierId, updatedPlanId as TierId)
+          ) {
+            // Downgrade: schedule for next period instead of immediate change
+            const effectiveAt =
+              pEnd || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+            await schedulePendingDowngrade(
+              supabase,
+              resolvedOrgId2,
+              updatedPlanId as TierId,
+              effectiveAt
+            );
+            console.log(
+              `Polar webhook: scheduled downgrade to ${updatedPlanId} for org ${resolvedOrgId2} effective at ${effectiveAt}`
+            );
+
+            // Update subscription status and period dates but NOT plan_id
+            const statusUpdate: Record<string, unknown> = {
+              subscription_status: getStr(eventData, "status") || "active",
+            };
+            if (pStart) statusUpdate.current_period_start = pStart;
+            if (pEnd) statusUpdate.current_period_end = pEnd;
+
+            await supabase
+              .from("organizations")
+              .update(statusUpdate)
+              .eq("id", resolvedOrgId2);
+          } else {
+            // Upgrade or lateral move: apply immediately
+            const updateData2: Record<string, unknown> = {
+              plan_id: updatedPlanId,
+              subscription_status: getStr(eventData, "status") || "active",
+              // Clear any pending downgrade on upgrade
+              pending_plan_id: null,
+              pending_plan_effective_at: null,
+            };
+            if (pStart) updateData2.current_period_start = pStart;
+            if (pEnd) updateData2.current_period_end = pEnd;
+
+            await supabase
+              .from("organizations")
+              .update(updateData2)
+              .eq("id", resolvedOrgId2);
+
+            console.log(
+              `Polar webhook: upgraded org ${resolvedOrgId2} to plan ${updatedPlanId}`
+            );
+          }
+        } else {
+          // No plan change — just update status and period dates (e.g. renewal)
+          const renewalUpdate: Record<string, unknown> = {
+            subscription_status: getStr(eventData, "status") || "active",
+          };
+          if (pStart) renewalUpdate.current_period_start = pStart;
+          if (pEnd) renewalUpdate.current_period_end = pEnd;
+
+          await supabase
+            .from("organizations")
+            .update(renewalUpdate)
+            .eq("id", resolvedOrgId2);
+
+          console.log(
+            `Polar webhook: renewed subscription for org ${resolvedOrgId2} (plan ${updatedPlanId})`
+          );
+        }
+
         return NextResponse.json({ received: true }, { status: 200 });
       }
 

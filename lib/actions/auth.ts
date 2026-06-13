@@ -43,18 +43,9 @@ export const signUpWithEmail = async (
 ): Promise<AuthActionState> => {
   const email = formData.get("email");
   const password = formData.get("password");
-  const confirmPassword = formData.get("confirmPassword");
 
-  if (
-    typeof email !== "string" ||
-    typeof password !== "string" ||
-    typeof confirmPassword !== "string"
-  ) {
-    return { error: "All fields are required." };
-  }
-
-  if (password !== confirmPassword) {
-    return { error: "Passwords do not match." };
+  if (typeof email !== "string" || typeof password !== "string") {
+    return { error: "Email and password are required." };
   }
 
   if (password.length < 8) {

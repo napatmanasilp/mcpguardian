@@ -30,19 +30,20 @@ export const HeroSection = () => {
 
             {/* Headline */}
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-tight leading-[1.1]">
-              Secure Every
+              Security Guardrails
               <br />
               <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
-                MCP Server
+                for Every MCP Server
               </span>
               <br />
-              Before Your Agent Does.
+              &amp; AI Agent.
             </h1>
 
             {/* Subheadline */}
             <p className="text-lg text-slate-400 mt-4 max-w-lg leading-relaxed">
-              MCPGuardian scans your MCP configuration for tool poisoning, rug-pull
-              mutations, credential leaks, and CVEs &mdash; in under a second.
+              MCPGuardian scans, proxies, and monitors every MCP server your AI
+              agents connect to &mdash; blocking tool poisoning, rug-pulls, and CVEs
+              before and during runtime.
             </p>
 
             {/* CTAs */}
@@ -74,8 +75,9 @@ export const HeroSection = () => {
                 "⚡ Sub-second scan",
                 "🔄 Rug pull detection",
                 "🛡 36 issue types",
-                "🔗 Native MCP tool",
+                "🔗 Runtime proxy",
                 "📋 OWASP MCP Top 10",
+                "🔒 Policy enforcement",
               ].map((pill) => (
                 <span
                   key={pill}

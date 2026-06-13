@@ -1,35 +1,72 @@
-"use client";
-
-import { useRouter, useSearchParams } from "next/navigation";
-import { Check, ChevronRight, Shield, ShieldAlert } from "lucide-react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Check, ChevronRight, FileText, Plus, Shield, ShieldAlert, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { OnboardingSteps } from "@/components/onboarding/onboarding-steps";
-import { ShieldLogo } from "@/components/auth/shield-logo";
+import { SuccessAnimation } from "@/components/onboarding/success-animation";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
-export default function ConfirmedPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const proxyConnected = searchParams.get("proxy") === "connected";
+export default async function ConfirmedPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ proxy?: string }>;
+}) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) redirect("/login");
+
+  const svc = createServiceClient();
+
+  // Fetch org membership
+  const { data: membership } = await svc
+    .from("organization_members")
+    .select("organization_id")
+    .eq("user_id", user.id)
+    .eq("invitation_status", "accepted")
+    .single();
+
+  if (!membership) redirect("/onboarding");
+
+  const orgId = membership.organization_id;
+
+  // Fetch the most recent scan for this organization
+  const { data: latestScan } = await svc
+    .from("scans")
+    .select("id")
+    .eq("organization_id", orgId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // Derive scan target link
+  const scanTarget = latestScan ? `/reports/${latestScan.id}` : "/servers";
+
+  const params = await searchParams;
+  const proxyConnected = params.proxy === "connected";
 
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
       <Card className="w-full max-w-lg border-white/10" style={{ background: "var(--bg-surface)" }}>
         <CardHeader className="text-center">
           <OnboardingSteps currentStep={3} />
-          <div className="mx-auto mb-4">
-            <div className="flex size-16 items-center justify-center rounded-full bg-emerald-500/20 mx-auto">
-              <Shield className="size-8 text-emerald-400" />
+
+          {/* Success animation — shown only when proxy=connected */}
+          <SuccessAnimation show={proxyConnected} />
+
+          {!proxyConnected && (
+            <div className="mx-auto mb-4">
+              <div className="flex size-16 items-center justify-center rounded-full bg-emerald-500/20 mx-auto">
+                <Shield className="size-8 text-emerald-400" />
+              </div>
             </div>
-          </div>
+          )}
+
           <CardTitle className="text-xl">
             {proxyConnected
               ? "MCPGuardian is now protecting your agent"
@@ -98,6 +135,45 @@ export default function ConfirmedPage() {
             </div>
           </div>
 
+          {/* "What now?" next-step cards — always visible */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-medium text-white/70 text-center">What now?</h3>
+            <div className="grid gap-2">
+              <Link
+                href={scanTarget}
+                className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition-colors group"
+              >
+                <div className="flex size-8 items-center justify-center rounded-full bg-blue-500/20">
+                  <FileText className="size-4 text-blue-400" />
+                </div>
+                <span className="flex-1 text-sm font-medium text-white/80">View scan report</span>
+                <ChevronRight className="size-4 text-white/30 group-hover:text-white/60 transition-colors" />
+              </Link>
+
+              <Link
+                href="/servers/new"
+                className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition-colors group"
+              >
+                <div className="flex size-8 items-center justify-center rounded-full bg-emerald-500/20">
+                  <Plus className="size-4 text-emerald-400" />
+                </div>
+                <span className="flex-1 text-sm font-medium text-white/80">Add another server</span>
+                <ChevronRight className="size-4 text-white/30 group-hover:text-white/60 transition-colors" />
+              </Link>
+
+              <Link
+                href="/settings/team"
+                className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition-colors group"
+              >
+                <div className="flex size-8 items-center justify-center rounded-full bg-purple-500/20">
+                  <Users className="size-4 text-purple-400" />
+                </div>
+                <span className="flex-1 text-sm font-medium text-white/80">Invite a teammate</span>
+                <ChevronRight className="size-4 text-white/30 group-hover:text-white/60 transition-colors" />
+              </Link>
+            </div>
+          </div>
+
           {/* Contextual message */}
           <p className="text-sm text-white/40 text-center">
             {proxyConnected
@@ -105,35 +181,30 @@ export default function ConfirmedPage() {
               : "Your server was scanned. Connect the proxy to enable full runtime protection."}
           </p>
 
-          {/* CTAs */}
-          <div className="flex gap-3">
-            {!proxyConnected && (
-              <Button
-                variant="outline"
-                className="flex-1 border-white/10"
-                onClick={() => router.push("/onboarding/proxy-setup")}
+          {/* Proxy setup CTA — only when proxy is not connected */}
+          {!proxyConnected && (
+            <div className="flex gap-3">
+              <Link
+                href="/onboarding/proxy-setup"
+                className="flex-1 inline-flex items-center justify-center rounded-md border border-white/10 px-4 py-2 text-sm font-medium hover:bg-white/5 transition-colors"
               >
                 Complete Proxy Setup →
-              </Button>
-            )}
-            <Button
-              className={proxyConnected ? "w-full gap-2" : "flex-1 gap-2"}
-              onClick={() => router.push("/dashboard")}
-            >
-              {proxyConnected ? "Explore Dashboard" : "Go to Dashboard"}{" "}
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-          {!proxyConnected && (
-            <div className="text-center">
-              <button
-                type="button"
-                onClick={() => router.push("/onboarding/confirmed?proxy=connected")}
-                className="text-xs text-white/30 hover:text-white/50 transition-colors"
+              </Link>
+              <Link
+                href="/dashboard"
+                className="flex-1 inline-flex items-center justify-center gap-2 rounded-md bg-white text-black px-4 py-2 text-sm font-medium hover:bg-white/90 transition-colors"
               >
-                I'll set this up later
-              </button>
+                Go to Dashboard <ChevronRight className="size-4" />
+              </Link>
             </div>
+          )}
+          {proxyConnected && (
+            <Link
+              href="/dashboard"
+              className="w-full inline-flex items-center justify-center gap-2 rounded-md bg-white text-black px-4 py-2 text-sm font-medium hover:bg-white/90 transition-colors"
+            >
+              Explore Dashboard <ChevronRight className="size-4" />
+            </Link>
           )}
         </CardContent>
       </Card>

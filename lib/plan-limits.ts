@@ -1,5 +1,14 @@
-// Single source of truth for all plan feature gates.
+/**
+ * @deprecated This module is deprecated in favor of `lib/tier-catalog.ts`.
+ * All tier definitions, pricing, and allowances should be sourced from the
+ * TIER_CATALOG constant in `lib/tier-catalog.ts`. This module is retained
+ * for backward compatibility only.
+ */
+
+// Legacy plan feature gates — retained for backward compatibility.
 // Used by API routes, UI components, and settings page.
+
+import { TIER_CATALOG, type TierId } from "./tier-catalog";
 
 export const PLAN_GATES = {
   free: {
@@ -221,11 +230,27 @@ export const PLAN_SIGNUP_URLS: Record<string, string> = {
   enterprise: "#contact-sales",
 };
 
+/**
+ * @deprecated Use `TIER_CATALOG` from `lib/tier-catalog.ts` instead.
+ * Prices are derived from TIER_CATALOG for backward compatibility.
+ */
 export const PLAN_PRICES: Record<string, { monthly: number; yearly: number }> = {
-  free: { monthly: 0, yearly: 0 },
-  developer: { monthly: 19, yearly: 15 },
-  team: { monthly: 99, yearly: 79 },
-  startup: { monthly: 399, yearly: 299 },
+  free: {
+    monthly: TIER_CATALOG.free.monthlyPriceCents / 100,
+    yearly: TIER_CATALOG.free.annualPricePerMonthCents / 100,
+  },
+  developer: {
+    monthly: TIER_CATALOG.developer.monthlyPriceCents / 100,
+    yearly: TIER_CATALOG.developer.annualPricePerMonthCents / 100,
+  },
+  team: {
+    monthly: TIER_CATALOG.team.monthlyPriceCents / 100,
+    yearly: TIER_CATALOG.team.annualPricePerMonthCents / 100,
+  },
+  startup: {
+    monthly: TIER_CATALOG.startup.monthlyPriceCents / 100,
+    yearly: TIER_CATALOG.startup.annualPricePerMonthCents / 100,
+  },
   enterprise: { monthly: -1, yearly: -1 },
 };
 

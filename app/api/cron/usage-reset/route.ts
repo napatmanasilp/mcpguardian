@@ -8,6 +8,7 @@
 //   3. Reset organizations.scans_used_this_period = 0
 //   4. Reset organizations.tool_calls_used_this_period = 0
 //   5. Update current_period_start, current_period_end from Polar subscription data
+//   6. Apply pending downgrades when a new billing period begins
 //
 // Note: Polar sends subscription.updated when a billing period renews.
 //       Use that event as the primary reset trigger.
@@ -17,7 +18,9 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { reportPolarUsage } from "@/lib/polar-checkout";
-import { getOverageRate, PLAN_GATES } from "@/lib/plan-limits";
+import { getOverageRate } from "@/lib/plan-limits";
+import { getTier } from "@/lib/tier-catalog";
+import { applyPendingDowngrade } from "@/lib/subscription-manager";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -35,7 +38,7 @@ export async function GET(request: NextRequest) {
   // Find orgs whose billing period has ended
   const { data: orgs } = await svc
     .from("organizations")
-    .select("id, plan_id, subscription_status, polar_subscription_id, polar_customer_id, current_period_start, current_period_end, scans_used_this_period, tool_calls_used_this_period")
+    .select("id, plan_id, subscription_status, polar_subscription_id, polar_customer_id, current_period_start, current_period_end, scans_used_this_period, tool_calls_used_this_period, pending_plan_id")
     .lt("current_period_end", now)
     .neq("plan_id", "free") // Free plan has no billing period
     .neq("subscription_status", "canceled");
@@ -50,12 +53,14 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  let downgrades = 0;
+
   for (const org of orgs) {
     try {
       const planId = org.plan_id ?? "free";
-      const planGates = PLAN_GATES[planId as keyof typeof PLAN_GATES] ?? PLAN_GATES.free;
-      const includedScans = planGates.checksPerMonth === -1 ? Infinity : planGates.checksPerMonth;
-      const includedToolCalls = planGates.checksPerMonth === -1 ? Infinity : planGates.checksPerMonth;
+      const tier = getTier(planId);
+      const includedScans = tier?.scanAllowance === null ? Infinity : (tier?.scanAllowance ?? 0);
+      const includedToolCalls = tier?.toolCallAllowance === null ? Infinity : (tier?.toolCallAllowance ?? 0);
 
       const scansUsed = org.scans_used_this_period ?? 0;
       const toolCallsUsed = org.tool_calls_used_this_period ?? 0;
@@ -93,14 +98,24 @@ export async function GET(request: NextRequest) {
       if (billingRecord) billingRecordsCreated++;
 
       // 2. Report overage to Polar if enabled
-      if (totalChargeCents > 0 && org.polar_subscription_id) {
+      if (totalChargeCents > 0 && org.polar_customer_id) {
         try {
-          await reportPolarUsage({
-            subscriptionId: org.polar_subscription_id,
-            meterId: `meter_${planId}_scans`,
-            quantity: scanOverage + toolCallOverage,
-            timestamp: new Date(),
-          });
+          if (scanOverage > 0) {
+            await reportPolarUsage({
+              subscriptionId: org.polar_customer_id,
+              meterId: "scan_overage",
+              quantity: scanOverage,
+              timestamp: new Date(),
+            });
+          }
+          if (toolCallOverage > 0) {
+            await reportPolarUsage({
+              subscriptionId: org.polar_customer_id,
+              meterId: "tool_call_overage",
+              quantity: toolCallOverage,
+              timestamp: new Date(),
+            });
+          }
           overageReported++;
         } catch {
           // Overage reporting is best-effort
@@ -124,6 +139,17 @@ export async function GET(request: NextRequest) {
         })
         .eq("id", org.id);
 
+      // 6. Apply pending downgrade if the org has one scheduled
+      if (org.pending_plan_id) {
+        try {
+          await applyPendingDowngrade(svc, org.id);
+          downgrades++;
+        } catch {
+          // Downgrade application is best-effort; log but continue
+          console.error(`[usage-reset-cron] Failed to apply pending downgrade for org ${org.id}`);
+        }
+      }
+
       orgsReset++;
 
       console.log(
@@ -137,7 +163,7 @@ export async function GET(request: NextRequest) {
   }
 
   console.log(
-    `[usage-reset-cron] orgs=${orgsReset} billing=${billingRecordsCreated} overage=${overageReported} errors=${errors}`,
+    `[usage-reset-cron] orgs=${orgsReset} billing=${billingRecordsCreated} overage=${overageReported} downgrades=${downgrades} errors=${errors}`,
   );
 
   return NextResponse.json({
@@ -145,6 +171,7 @@ export async function GET(request: NextRequest) {
     orgsReset,
     billingRecordsCreated,
     overageReported,
+    downgrades,
     errors,
   });
 }

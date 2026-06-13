@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { RescanButtonWithRefresh } from "@/components/servers/rescan-button-with-refresh";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
@@ -46,7 +47,7 @@ const ServersPage = async ({
 
   let queryBuilder = svc
     .from("mcp_servers")
-    .select("id, name, transport_type, endpoint_url, allowlist_status, last_scan_result, risk_score, created_at, allowlisted_at")
+    .select("id, name, transport_type, endpoint_url, allowlist_status, last_scan_result, last_scan_at, risk_score, created_at")
     .eq("organization_id", membership.organization_id)
     .order("created_at", { ascending: false });
 
@@ -56,6 +57,38 @@ const ServersPage = async ({
 
   const { data: servers } = await queryBuilder;
 
+  // Fetch latest latency + active session count per server in parallel
+  const serverIds = servers?.map((s) => s.id) ?? [];
+  const [latencyRows, sessionRows] = await Promise.all([
+    serverIds.length > 0
+      ? svc
+          .from("server_health_metrics")
+          .select("mcp_server_id, latency_ms")
+          .in("mcp_server_id", serverIds)
+          .order("recorded_at", { ascending: false })
+          .limit(serverIds.length * 5) // up to 5 recent readings per server
+      : Promise.resolve({ data: [] }),
+    serverIds.length > 0
+      ? svc
+          .from("proxy_sessions")
+          .select("mcp_server_id")
+          .in("mcp_server_id", serverIds)
+          .eq("status", "active")
+      : Promise.resolve({ data: [] }),
+  ]);
+
+  // Build lookup maps
+  const latencyByServer: Record<string, number | null> = {};
+  for (const row of (latencyRows.data ?? [])) {
+    if (!(row.mcp_server_id in latencyByServer)) {
+      latencyByServer[row.mcp_server_id] = row.latency_ms ?? null;
+    }
+  }
+  const sessionCountByServer: Record<string, number> = {};
+  for (const row of (sessionRows.data ?? [])) {
+    sessionCountByServer[row.mcp_server_id] = (sessionCountByServer[row.mcp_server_id] ?? 0) + 1;
+  }
+
   return (
     <main className="flex flex-1 flex-col gap-6 p-6">
       {/* Header */}
@@ -64,7 +97,7 @@ const ServersPage = async ({
           <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Servers</p>
           <h1 className="text-2xl font-bold tracking-tight">MCP Servers</h1>
         </div>
-        <Link href="/onboarding">
+        <Link href="/servers/new">
           <Button className="gap-2 shrink-0">
             <Plus className="size-4" />
             Add Server
@@ -133,10 +166,11 @@ const ServersPage = async ({
                         {/* 4 inline stats */}
                         <div className="hidden sm:flex items-center gap-4 text-xs font-mono text-slate-400">
                           <span>Risk: {server.risk_score ?? "—"}/100</span>
-                          <span>Latency: —ms</span>
-                          <span>Sessions: 0</span>
-                          <span>Scan: {timeAgo(server.last_scan_result ? server.created_at : null)}</span>
+                          <span>Latency: {latencyByServer[server.id] != null ? `${latencyByServer[server.id]}ms` : "—"}</span>
+                          <span>Sessions: {sessionCountByServer[server.id] ?? 0}</span>
+                          <span>Scan: {timeAgo(server.last_scan_at ?? null)}</span>
                         </div>
+                        <RescanButtonWithRefresh serverId={server.id} />
                         <ArrowRight className="size-3.5 text-slate-500 shrink-0" />
                       </div>
                       {/* Risk bar */}
@@ -195,15 +229,15 @@ const ServersPage = async ({
                         </div>
                         <div>
                           <p className="text-[9px] text-slate-500 uppercase tracking-wider">Latency</p>
-                          <p>—ms</p>
+                          <p>{latencyByServer[server.id] != null ? `${latencyByServer[server.id]}ms` : "—"}</p>
                         </div>
                         <div>
                           <p className="text-[9px] text-slate-500 uppercase tracking-wider">Sessions</p>
-                          <p>0</p>
+                          <p>{sessionCountByServer[server.id] ?? 0}</p>
                         </div>
                         <div>
                           <p className="text-[9px] text-slate-500 uppercase tracking-wider">Last Scan</p>
-                          <p>{timeAgo(server.last_scan_result ? server.created_at : null)}</p>
+                          <p>{timeAgo(server.last_scan_at ?? null)}</p>
                         </div>
                       </div>
 
@@ -221,6 +255,9 @@ const ServersPage = async ({
                           </div>
                         )}
                       </div>
+
+                      {/* Rescan action */}
+                      <RescanButtonWithRefresh serverId={server.id} />
                     </CardContent>
                   </Card>
                 </Link>
@@ -233,7 +270,7 @@ const ServersPage = async ({
           <Server className="size-12 text-slate-600 mb-4" />
           <h2 className="text-lg font-semibold text-slate-300 mb-1">No servers registered</h2>
           <p className="text-sm text-slate-500 mb-6">Add your first MCP server to begin scanning.</p>
-          <Link href="/onboarding">
+          <Link href="/servers/new">
             <Button className="gap-2">
               <Plus className="size-4" />
               Add Server

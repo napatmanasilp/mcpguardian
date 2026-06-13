@@ -198,7 +198,7 @@ export default function ProxySetupPage() {
       } catch {
         // poll continues
       }
-    }, 3000);
+    }, 10_000);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -368,6 +368,28 @@ export default function ProxySetupPage() {
             </div>
           </div>
 
+          {/* Client tabs */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-slate-300">Your MCP client</p>
+            <div className="flex gap-1 flex-wrap">
+              {(["Claude Desktop", "Cursor", "Cline", "Custom"] as const).map((client) => (
+                <button
+                  key={client}
+                  type="button"
+                  className="px-3 py-1.5 rounded-md text-xs font-mono border border-white/10 text-slate-400 hover:border-blue-500/40 hover:text-blue-400 hover:bg-blue-500/5 transition-colors"
+                >
+                  {client}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-slate-500">
+              Paste the config below into your client&apos;s MCP server settings.
+              For <span className="text-slate-300">Claude Desktop</span>: open{" "}
+              <code className="text-[11px] bg-white/5 px-1 rounded">claude_desktop_config.json</code> and
+              replace the <code className="text-[11px] bg-white/5 px-1 rounded">mcpServers</code> block.
+            </p>
+          </div>
+
           {/* Config block with syntax highlighting */}
           <div className="space-y-2">
             <p className="text-sm font-medium text-slate-300">MCP client configuration</p>
@@ -415,19 +437,24 @@ export default function ProxySetupPage() {
           <div className="rounded-lg border border-white/10 bg-white/5 p-4 text-center">
             {statusVariant === "loading" && (
               <div className="flex items-center justify-center gap-3">
-                <div className="shimmer size-8 rounded-full shrink-0" />
-                <div className="space-y-1.5">
-                  <div className="h-4 w-48 rounded shimmer" />
-                  <div className="h-3 w-32 rounded shimmer" />
+                <div className="size-8 rounded-full bg-white/10 animate-pulse shrink-0" />
+                <div className="space-y-1.5 text-left">
+                  <div className="h-4 w-48 rounded bg-white/10 animate-pulse" />
+                  <div className="h-3 w-32 rounded bg-white/10 animate-pulse" />
                 </div>
               </div>
             )}
             {statusVariant === "waiting" && (
               <div className="flex items-center justify-center gap-3">
-                <div className="shimmer size-8 rounded-full shrink-0" />
-                <div className="space-y-1.5">
-                  <div className="h-4 w-48 rounded shimmer" />
-                  <div className="h-3 w-32 rounded shimmer" />
+                <div className="relative flex size-8 items-center justify-center shrink-0">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-blue-400 opacity-30" />
+                  <span className="relative inline-flex size-3 rounded-full bg-blue-500" />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-medium text-slate-300">{statusMessage}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Make one tool call from your MCP client to confirm
+                  </p>
                 </div>
               </div>
             )}
@@ -447,6 +474,21 @@ export default function ProxySetupPage() {
               </div>
             )}
           </div>
+
+          {/* Debug checklist on timeout */}
+          {connectionStatus === "timeout" && (
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+              <p className="text-sm font-medium text-amber-400">
+                Troubleshooting checklist
+              </p>
+              <ol className="list-decimal list-inside space-y-2 text-sm text-slate-300">
+                <li>Verify the proxy URL in your config matches the URL shown above</li>
+                <li>Confirm the Authorization header contains your full bearer token</li>
+                <li>Restart your MCP client after saving the config</li>
+                <li>Check that your firewall allows outbound HTTPS on port 443</li>
+              </ol>
+            </div>
+          )}
 
           <div className="flex gap-3">
             {connectionStatus === "detected" ? (

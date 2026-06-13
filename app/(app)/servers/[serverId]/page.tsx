@@ -45,7 +45,7 @@ const ServerDetailPage = async ({
     .select("id, overall_score, overall_result, risk_score, servers_scanned, created_at")
     .eq("organization_id", membership.organization_id)
     .order("created_at", { ascending: false })
-    .limit(10);
+    .limit(5);
 
   const { data: recentSessions } = await svc
     .from("proxy_sessions")

@@ -64,35 +64,61 @@ export async function createPolarCustomerPortal({
 /**
  * Reports metered usage to Polar.sh for overage billing.
  *
- * Polar.sh handles usage-based billing through its meter system.
- * In production, this would call polar.events.ingest() to report
- * billable events tied to a subscription's meter.
+ * Uses Polar's Events API to ingest billable usage events.
+ * Events are tied to meters configured in the Polar dashboard,
+ * which drive usage-based pricing on subscriptions.
  *
- * Called by the usage-reset cron after each billable action.
+ * Prerequisites in Polar dashboard:
+ *   1. Create event names (e.g. "scan_overage", "tool_call_overage")
+ *   2. Create meters that aggregate those events
+ *   3. Attach meters to products via usage-based pricing
  *
- * @returns true if the usage was reported successfully
+ * Called by the usage-reset cron after each billing period ends,
+ * reporting any scan or tool-call overages as billable events.
+ *
+ * @returns true if the usage was reported successfully, false otherwise
  */
-export async function reportPolarUsage(_opts: {
-  /** Polar subscription ID */
+export async function reportPolarUsage(opts: {
+  /** Polar customer ID (from organizations.polar_customer_id) */
   subscriptionId: string;
-  /** Polar meter ID (configured in Polar dashboard) */
+  /** Event name matching a Polar meter (e.g. "scan_overage") */
   meterId: string;
   /** Number of billable units */
   quantity: number;
   /** When the usage occurred */
   timestamp: Date;
 }): Promise<boolean> {
-  // TODO: Implement metered usage reporting via Polar events API.
-  // The Polar SDK exposes polar.events.ingest() which can be used
-  // to report custom events that trigger meter calculations.
-  // Example:
-  //   await polar.events.ingest({
-  //     event_name: "tool_call",
-  //     customer_id: customerId,
-  //     properties: { meter_id: meterId, quantity },
-  //   });
-  console.log(
-    `[Polar usage] subscription=${_opts.subscriptionId} meter=${_opts.meterId} qty=${_opts.quantity}`,
-  );
-  return true;
+  if (opts.quantity <= 0) return true; // Nothing to report
+
+  try {
+    // Polar SDK events.ingest: sends a batch of events that trigger
+    // meter calculations and usage-based billing.
+    // Each event is tied to a customer via their Polar customer ID.
+    await polar.events.ingest({
+      events: [
+        {
+          customerId: opts.subscriptionId,
+          name: opts.meterId,
+          timestamp: opts.timestamp,
+          metadata: {
+            quantity: opts.quantity,
+          },
+        },
+      ],
+    });
+
+    console.log(
+      `[Polar usage] Reported: customer=${opts.subscriptionId} event=${opts.meterId} qty=${opts.quantity}`,
+    );
+    return true;
+  } catch (error) {
+    // Log but don't throw — overage reporting is best-effort.
+    // If the event name doesn't match a meter or the API is unreachable,
+    // we still want the cron to continue processing other orgs.
+    console.error(
+      `[Polar usage] Failed to report: customer=${opts.subscriptionId} event=${opts.meterId} qty=${opts.quantity}`,
+      error,
+    );
+    return false;
+  }
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Bell, ExternalLink } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { AlertRow } from "@/components/alerts/alert-row";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
@@ -34,7 +34,7 @@ const AlertsPage = async ({
 
   let query = svc
     .from("alerts")
-    .select("id, alert_type, severity, title, message, read, created_at, organization_id")
+    .select("id, alert_type, severity, title, message, read, created_at, organization_id, session_id, server_id")
     .eq("organization_id", membership.organization_id);
 
   if (severityFilter && ["critical", "high", "medium"].includes(severityFilter)) {
@@ -53,31 +53,6 @@ const AlertsPage = async ({
     .limit(50);
 
   const hasUnread = alerts?.some((a) => !a.read) ?? false;
-
-  const severityIcon = (severity: string) => {
-    switch (severity.toLowerCase()) {
-      case "critical":
-        return <span className="size-3 rounded-full bg-red-500 shrink-0" />;
-      case "high":
-        return <span className="size-3 rounded-full bg-orange-500 shrink-0" />;
-      case "medium":
-        return <span className="size-3 rounded-full bg-yellow-500 shrink-0" />;
-      default:
-        return <span className="size-3 rounded-full bg-blue-500 shrink-0" />;
-    }
-  };
-
-  const relativeTime = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "Just now";
-    if (mins < 60) return `${mins}m ago`;
-    const hours = Math.floor(mins / 60);
-    if (hours < 24) return `${hours}h ago`;
-    const days = Math.floor(hours / 24);
-    if (days < 30) return `${days}d ago`;
-    return `${Math.floor(days / 30)}mo ago`;
-  };
 
   const buildUrl = (severity: string, status: string) => {
     const p = new URLSearchParams();
@@ -195,65 +170,7 @@ const AlertsPage = async ({
       {alerts && alerts.length > 0 ? (
         <div className="space-y-2">
           {alerts.map((alert) => (
-            <form key={alert.id} action={async () => {
-              "use server";
-              const sv = createServiceClient();
-              await sv
-                .from("alerts")
-                .update({ read: true })
-                .eq("id", alert.id)
-                .eq("organization_id", membership.organization_id);
-            }}>
-              <button type="submit" className="w-full text-left">
-                <div
-                  className={cn(
-                    "flex items-start gap-4 rounded-lg border px-4 py-3 transition-colors hover:bg-white/[0.03] cursor-pointer",
-                    !alert.read
-                      ? "border-l-4 border-l-blue-500 border-white/10 bg-[hsl(222,47%,6%)]"
-                      : "border-white/5 bg-white/[0.02]",
-                  )}
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="flex items-center gap-2 shrink-0">
-                      {severityIcon(alert.severity)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p
-                          className={cn(
-                            "text-sm font-medium truncate",
-                            !alert.read ? "text-slate-200" : "text-slate-400",
-                          )}
-                        >
-                          {alert.title}
-                        </p>
-                        <Badge
-                          variant={
-                            alert.severity.toLowerCase() === "critical"
-                              ? "destructive"
-                              : alert.severity.toLowerCase() === "high"
-                                ? "default"
-                                : "secondary"
-                          }
-                          className="text-[9px] shrink-0"
-                        >
-                          {alert.severity}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-slate-400 line-clamp-2 mt-0.5">
-                        {alert.message}
-                      </p>
-                      <p className="text-[10px] text-slate-500 mt-1">
-                        {relativeTime(alert.created_at)}
-                      </p>
-                    </div>
-                  </div>
-                  {!alert.read && (
-                    <span className="mt-1.5 size-2 shrink-0 rounded-full bg-blue-500" />
-                  )}
-                </div>
-              </button>
-            </form>
+            <AlertRow key={alert.id} alert={alert} />
           ))}
         </div>
       ) : (

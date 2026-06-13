@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 export async function GET(request: Request) {
   if (
@@ -8,7 +8,8 @@ export async function GET(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const supabase = await createClient();
+  // Use service client so RLS doesn't block cross-user writes
+  const supabase = createServiceClient();
 
   // Reset monthly counters
   await supabase

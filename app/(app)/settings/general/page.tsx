@@ -4,6 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DeleteOrgSection } from "@/components/settings/delete-org-section";
+import { OrgLogoUpload } from "@/components/settings/org-logo-upload";
+import { OrgNameForm } from "@/components/settings/org-name-form";
+import { TimezoneSelector } from "@/components/settings/timezone-selector";
 import { signOut } from "@/lib/actions/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -22,15 +26,21 @@ const GeneralSettingsPage = async () => {
     .single();
 
   let orgName = "";
+  let orgTimezone = "UTC";
+  let orgLogoUrl: string | null = null;
   let userEmail = user.email ?? "";
 
   if (membership) {
     const { data: org } = await svc
       .from("organizations")
-      .select("name")
+      .select("name, timezone, logo_url")
       .eq("id", membership.organization_id)
       .single();
-    if (org) orgName = org.name;
+    if (org) {
+      orgName = org.name;
+      orgTimezone = org.timezone ?? "UTC";
+      orgLogoUrl = org.logo_url ?? null;
+    }
   }
 
   return (
@@ -48,16 +58,22 @@ const GeneralSettingsPage = async () => {
             Your organization&apos;s name and branding.
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="orgName" className="text-xs text-slate-400">Organization name</Label>
-            <Input
-              id="orgName"
-              defaultValue={orgName}
-              className="border-white/10 bg-white/5 max-w-md"
-            />
-          </div>
-          <Button size="sm" className="bg-blue-600 hover:bg-blue-700">Save</Button>
+        <CardContent className="space-y-6">
+          <OrgNameForm initialName={orgName} />
+          <OrgLogoUpload currentLogoUrl={orgLogoUrl} />
+        </CardContent>
+      </Card>
+
+      {/* Timezone */}
+      <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
+        <CardHeader>
+          <CardTitle className="text-sm font-semibold text-slate-200">Timezone</CardTitle>
+          <CardDescription className="text-xs text-slate-500">
+            Set your organization&apos;s default timezone for reports and scheduling.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <TimezoneSelector currentTimezone={orgTimezone} />
         </CardContent>
       </Card>
 
@@ -81,6 +97,9 @@ const GeneralSettingsPage = async () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Danger Zone — Delete Organization */}
+      <DeleteOrgSection orgName={orgName} />
 
       {/* Sign Out */}
       <form action={signOut}>

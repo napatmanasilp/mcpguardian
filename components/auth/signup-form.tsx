@@ -8,7 +8,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { GitHubIcon } from "@/components/icons/github-icon";
+import { GoogleIcon } from "@/components/icons/google-icon";
+import { PasswordStrengthMeter, computeStrength } from "@/components/auth/password-strength-meter";
 import { createClient } from "@/lib/supabase/client";
+import { getSiteUrl } from "@/lib/supabase/env";
 import { signUpWithEmail, type AuthActionState } from "@/lib/actions/auth";
 
 const initialState: AuthActionState = {};
@@ -20,6 +25,8 @@ export const SignupForm = () => {
   );
   const [submittedEmail, setSubmittedEmail] = useState("");
   const [resending, setResending] = useState(false);
+  const [password, setPassword] = useState("");
+  const [weakError, setWeakError] = useState("");
 
   const handleFormAction = useCallback(
     async (formData: FormData) => {
@@ -31,6 +38,18 @@ export const SignupForm = () => {
       return formAction(formData);
     },
     [formAction],
+  );
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent<HTMLFormElement>) => {
+      if (computeStrength(password) === "weak") {
+        e.preventDefault();
+        setWeakError("Password is too weak. Use at least 8 characters.");
+        return;
+      }
+      setWeakError("");
+    },
+    [password],
   );
 
   const handleResend = useCallback(async () => {
@@ -53,6 +72,32 @@ export const SignupForm = () => {
       setResending(false);
     }
   }, [submittedEmail]);
+
+  const handleGitHubSignUp = async () => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "github",
+      options: {
+        redirectTo: `${getSiteUrl()}/auth/callback?next=/onboarding`,
+      },
+    });
+    if (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleGoogleSignUp = async () => {
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${getSiteUrl()}/auth/callback?next=/onboarding`,
+      },
+    });
+    if (error) {
+      toast.error(error.message);
+    }
+  };
 
   if (state.success) {
     return (
@@ -97,7 +142,36 @@ export const SignupForm = () => {
         </p>
       </div>
 
-      <form action={handleFormAction} className="space-y-4">
+      <div className="space-y-3">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={handleGoogleSignUp}
+        >
+          <GoogleIcon className="size-4" />
+          Sign up with Google
+        </Button>
+
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={handleGitHubSignUp}
+        >
+          <GitHubIcon className="size-4" />
+          Sign up with GitHub
+        </Button>
+      </div>
+
+      <div className="relative">
+        <Separator />
+        <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card px-2 text-xs text-muted-foreground">
+          or
+        </span>
+      </div>
+
+      <form action={handleFormAction} onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input
@@ -119,19 +193,18 @@ export const SignupForm = () => {
             autoComplete="new-password"
             minLength={8}
             required
+            value={password}
+            onChange={(e) => {
+              setPassword(e.target.value);
+              if (weakError) setWeakError("");
+            }}
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirm password</Label>
-          <Input
-            id="confirmPassword"
-            name="confirmPassword"
-            type="password"
-            autoComplete="new-password"
-            minLength={8}
-            required
-          />
+          <PasswordStrengthMeter password={password} />
+          {weakError && (
+            <p className="text-sm text-destructive" role="alert">
+              {weakError}
+            </p>
+          )}
         </div>
 
         {state.error ? (
@@ -151,6 +224,18 @@ export const SignupForm = () => {
           )}
         </Button>
       </form>
+
+      <p className="text-center text-xs text-muted-foreground">
+        By signing up, you agree to our{" "}
+        <a
+          href="/terms"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-primary hover:underline"
+        >
+          Terms of Service
+        </a>
+      </p>
 
       <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
