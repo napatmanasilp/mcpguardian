@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { FileText, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { requestPdfReport } from "@/lib/actions/compliance";
@@ -15,13 +16,15 @@ export function RequestPdfButton() {
     initialState,
   );
   const prevStateRef = useRef(state);
-  const hasSubmitted = useRef(false);
 
   useEffect(() => {
     if (state === prevStateRef.current) return;
     prevStateRef.current = state;
-    if (state.success || state.error) {
-      hasSubmitted.current = true;
+
+    if (state.success) {
+      toast.success("Report is being generated. It will appear in the Reports section within a few minutes.");
+    } else if (state.error) {
+      toast.error(state.error);
     }
   }, [state]);
 
@@ -45,16 +48,6 @@ export function RequestPdfButton() {
           </>
         )}
       </Button>
-      {state.success && hasSubmitted.current && (
-        <p className="text-xs text-emerald-400 mt-2 text-center">
-          Your report is being generated and will appear in the Reports section within a few minutes.
-        </p>
-      )}
-      {state.error && hasSubmitted.current && (
-        <p className="text-xs text-red-400 mt-2 text-center">
-          {state.error}
-        </p>
-      )}
     </form>
   );
 }

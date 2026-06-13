@@ -17,11 +17,16 @@ const protectedRoutes = [
   "/onboarding",
 ];
 
+const authRoutes = ["/login", "/signup", "/forgot-password"];
+
 export const middleware = async (request: NextRequest) => {
   const supabaseResponse = NextResponse.next({ request });
 
   const { pathname } = request.nextUrl;
   const isProtected = protectedRoutes.some(
+    (route) => pathname === route || pathname.startsWith(`${route}/`),
+  );
+  const isAuthRoute = authRoutes.some(
     (route) => pathname === route || pathname.startsWith(`${route}/`),
   );
 
@@ -64,6 +69,11 @@ export const middleware = async (request: NextRequest) => {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirectTo", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  // Redirect authenticated users away from auth routes to dashboard
+  if (isAuthRoute && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Note: Org membership check is NOT performed in middleware.

@@ -1,10 +1,26 @@
 "use client";
 
 import { useState } from "react";
-import { ScanResults } from "@/components/scan-results";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
+import { DynamicErrorBoundary } from "@/components/ui/dynamic-error-boundary";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import type { ScanResult } from "@/lib/scanner/types";
+
+// Code-split: ScanResults is a very large client component (500+ lines with sub-components,
+// accordion, dropdowns, charts). Only rendered when user opens the report sheet.
+// Requirement 20.1: code-split client components > 50 KB not needed on initial render
+// Requirement 20.5: handle dynamic import failure with inline error + retry
+const ScanResults = dynamic(
+  () => import("@/components/scan-results").then((mod) => mod.ScanResults),
+  {
+    ssr: false,
+    loading: () => (
+      <PageSkeleton blocks={[{ type: "chart", height: "16rem" }, { type: "table", height: "12rem" }]} />
+    ),
+  },
+);
 
 interface ScanRow {
   id: string;
@@ -58,7 +74,9 @@ export const ReportSheetClient = ({
           <SheetTitle>Scan Report &mdash; {dateStr}</SheetTitle>
         </SheetHeader>
         {result ? (
-          <ScanResults result={result} />
+          <DynamicErrorBoundary componentName="Scan Results">
+            <ScanResults result={result} />
+          </DynamicErrorBoundary>
         ) : (
           <p className="text-sm text-muted-foreground">No results data available.</p>
         )}

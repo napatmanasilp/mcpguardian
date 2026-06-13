@@ -49,25 +49,25 @@ export function ClientInstructions({ proxyUrl, bearerToken }: ClientInstructions
       <TabsList className="grid w-full grid-cols-4 bg-white/5 border border-white/10">
         <TabsTrigger
           value="claude-desktop"
-          className="text-xs data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400"
+          className="text-xs data-[state=active]:bg-monitor/20 data-[state=active]:text-monitor"
         >
           Claude Desktop
         </TabsTrigger>
         <TabsTrigger
           value="cursor"
-          className="text-xs data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400"
+          className="text-xs data-[state=active]:bg-monitor/20 data-[state=active]:text-monitor"
         >
           Cursor
         </TabsTrigger>
         <TabsTrigger
           value="cline"
-          className="text-xs data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400"
+          className="text-xs data-[state=active]:bg-monitor/20 data-[state=active]:text-monitor"
         >
           Cline
         </TabsTrigger>
         <TabsTrigger
           value="custom"
-          className="text-xs data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400"
+          className="text-xs data-[state=active]:bg-monitor/20 data-[state=active]:text-monitor"
         >
           Custom
         </TabsTrigger>

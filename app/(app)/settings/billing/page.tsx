@@ -1,13 +1,19 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AlertTriangle, ArrowRight, Download, ExternalLink } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Billing — MCPGuardian",
+  description: "View your plan, usage metrics, and invoice history.",
+};
 
 import { AnnualSwitchButton } from "@/components/billing/annual-switch-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { createClient } from "@/lib/supabase/server";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
 import { shouldShowWarning, formatAllowanceDisplay } from "@/lib/quota-enforcer";
 import { TIER_CATALOG, getTier } from "@/lib/tier-catalog";
@@ -16,24 +22,15 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/invoice";
 
 const BillingSettingsPage = async () => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const orgContext = await getOrgContext();
+  if (!orgContext) redirect("/onboarding");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
-
-  if (!membership) redirect("/onboarding");
 
   const { data: org } = await svc
     .from("organizations")
     .select("name, plan_id, scans_used_this_period, tool_calls_used_this_period, current_period_start, current_period_end, billing_cycle")
-    .eq("id", membership.organization_id)
+    .eq("id", orgContext.organizationId)
     .single();
 
   if (!org) redirect("/onboarding");
@@ -41,13 +38,13 @@ const BillingSettingsPage = async () => {
   const { data: addons } = await svc
     .from("addon_purchases")
     .select("*")
-    .eq("organization_id", membership.organization_id)
+    .eq("organization_id", orgContext.organizationId)
     .eq("status", "active");
 
   const { data: invoices } = await svc
     .from("invoices")
     .select("id, created_at, amount_paid, currency, status, hosted_invoice_url")
-    .eq("organization_id", membership.organization_id)
+    .eq("organization_id", orgContext.organizationId)
     .order("created_at", { ascending: false }) as { data: Invoice[] | null };
 
   const tier = getTier(org.plan_id ?? "free") ?? TIER_CATALOG.free;

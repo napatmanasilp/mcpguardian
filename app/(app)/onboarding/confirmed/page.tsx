@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Check, ChevronRight, FileText, Plus, Shield, ShieldAlert, Users } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Setup Complete — MCPGuardian",
+  description: "Your MCPGuardian organization setup is complete.",
+};
 
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";

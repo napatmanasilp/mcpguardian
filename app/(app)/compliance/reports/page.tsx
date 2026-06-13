@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FileText, Download } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Compliance Reports — MCPGuardian",
+  description: "View and download compliance assessment reports.",
+};
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,8 +63,8 @@ const ComplianceReportsPage = async () => {
           {reports.map((report) => (
             <div key={report.id} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3">
               <div className="flex items-center gap-4">
-                <div className="size-8 rounded-lg bg-blue-500/15 flex items-center justify-center">
-                  <FileText className="size-4 text-blue-400" />
+                <div className="size-8 rounded-lg bg-monitor/15 flex items-center justify-center">
+                  <FileText className="size-4 text-monitor" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-slate-200">{report.report_type}</p>

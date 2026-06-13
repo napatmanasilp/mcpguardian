@@ -74,9 +74,9 @@ const ServerScansPage = async ({
                 <div className="flex items-center gap-4">
                   <span className={cn(
                     "font-mono text-base font-bold",
-                    scan.overall_score >= 80 ? "text-emerald-400" :
-                    scan.overall_score >= 60 ? "text-amber-400" :
-                    "text-red-400"
+                    scan.overall_score >= 80 ? "text-secure" :
+                    scan.overall_score >= 60 ? "text-caution" :
+                    "text-threat"
                   )}>
                     {scan.overall_score ?? "—"}
                   </span>

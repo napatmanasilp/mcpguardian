@@ -48,8 +48,8 @@ describe("Property 26: Feature comparison table uses Check/Minus notation correc
         const svg = container.querySelector("svg");
         expect(svg).not.toBeNull();
 
-        // Should have the emerald color class (Check icon styling)
-        expect(svg!.classList.contains("text-emerald-400")).toBe(true);
+        // Should have the secure color class (Check icon styling)
+        expect(svg!.classList.contains("text-secure")).toBe(true);
 
         // Should NOT contain a text span
         const span = container.querySelector("span");
@@ -130,7 +130,7 @@ describe("Property 26: Feature comparison table uses Check/Minus notation correc
           // Check icon present, no text span
           expect(svg).not.toBeNull();
           expect(span).toBeNull();
-          expect(svg!.classList.contains("text-emerald-400")).toBe(true);
+          expect(svg!.classList.contains("text-secure")).toBe(true);
         } else if (value === false) {
           // Minus icon present, no text span
           expect(svg).not.toBeNull();

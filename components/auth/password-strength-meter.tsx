@@ -20,7 +20,7 @@ export function PasswordStrengthMeter({ password }: Props) {
 
   const segmentColors = {
     weak: "bg-threat",
-    fair: "bg-amber-500",
+    fair: "bg-caution",
     strong: "bg-secure",
   };
 
@@ -47,7 +47,7 @@ export function PasswordStrengthMeter({ password }: Props) {
           strength === "weak"
             ? "text-threat"
             : strength === "fair"
-              ? "text-amber-500"
+              ? "text-caution"
               : "text-secure"
         }`}
       >

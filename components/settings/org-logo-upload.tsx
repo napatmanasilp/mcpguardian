@@ -83,6 +83,7 @@ export function OrgLogoUpload({ currentLogoUrl }: OrgLogoUploadProps) {
             <img
               src={previewUrl}
               alt="Organization logo"
+              loading="lazy"
               className="size-full object-contain"
             />
           ) : (
@@ -124,7 +125,7 @@ export function OrgLogoUpload({ currentLogoUrl }: OrgLogoUploadProps) {
 
       {/* Inline validation error */}
       {validationError && (
-        <p className="text-xs text-red-400">{validationError}</p>
+        <p className="text-xs text-threat">{validationError}</p>
       )}
     </form>
   );

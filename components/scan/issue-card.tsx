@@ -64,7 +64,7 @@ export function IssueCard({ issue }: IssueCardProps) {
       {/* Fix box */}
       {issue.fix && (
         <div className="rounded-md border border-white/10 bg-white/[0.03] p-2.5 flex gap-2">
-          <Lightbulb className="size-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+          <Lightbulb className="size-3.5 text-caution mt-0.5 flex-shrink-0" />
           <p className="text-xs text-slate-300 leading-relaxed">{issue.fix}</p>
         </div>
       )}

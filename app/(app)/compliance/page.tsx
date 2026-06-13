@@ -1,16 +1,24 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CheckCircle2, Clock, ExternalLink, FileText, RefreshCw } from "lucide-react";
 
+export const metadata: Metadata = {
+  title: "Compliance — MCPGuardian",
+  description: "NSA MCP Security CSI compliance status and OWASP MCP Top 10 assessment.",
+};
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { FrameworkTabs } from "@/components/compliance/framework-tabs";
 import { RequestPdfButton } from "@/components/compliance/request-pdf-button";
 import { computeComplianceScore } from "@/lib/compliance-score";
 import { getOwaspMcpControls, getTriggeredOwaspIds } from "@/lib/compliance-mappings";
-import { createClient } from "@/lib/supabase/server";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
+import { EMPTY_STATES } from "@/lib/ui/empty-states";
 import { cn } from "@/lib/utils";
 
 // Static control definitions — status is overridden by live assessment when available
@@ -52,7 +60,7 @@ function CircularProgress({ value, size = 140, strokeWidth = 10 }: { value: numb
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (value / 100) * circumference;
-  const color = value >= 80 ? "#34d399" : value >= 60 ? "#fbbf24" : "#f87171";
+  const color = value >= 80 ? "var(--secure)" : value >= 60 ? "var(--caution)" : "var(--threat)";
 
   return (
     <div className="relative inline-flex items-center justify-center">
@@ -75,36 +83,41 @@ function CircularProgress({ value, size = 140, strokeWidth = 10 }: { value: numb
 }
 
 const CompliancePage = async () => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const orgContext = await getOrgContext();
+  if (!orgContext) redirect("/onboarding");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
 
-  if (!membership) redirect("/onboarding");
+  // Check if org has any servers — no servers means no compliance data possible
+  const { count: serverCount } = await svc
+    .from("mcp_servers")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgContext.organizationId);
 
+  // Fetch most recent NSA compliance assessment
   const { data: assessment } = await svc
     .from("nsa_compliance_assessments")
     .select("parameter_validation_active, tool_execution_sandboxed, all_invocations_logged, injection_filtering_active, message_signing_configured, least_privilege_tokens_enforced, network_scan_for_unauthorized_servers, chained_output_filtering_active, overall_score, pdf_report_url, pdf_generated_at, assessed_at")
-    .eq("organization_id", membership.organization_id)
+    .eq("organization_id", orgContext.organizationId)
     .order("assessed_at", { ascending: false })
     .limit(1)
     .maybeSingle() as { data: Assessment | null };
+
+  // If no servers AND no assessment, show the empty state
+  if ((serverCount ?? 0) === 0 && !assessment) {
+    return (
+      <main className="flex flex-1 flex-col items-center justify-center p-6">
+        <EmptyState {...EMPTY_STATES["compliance"]} />
+      </main>
+    );
+  }
 
   // Resolve each control's live status from the DB assessment, falling back to default
   const controls = NSA_CONTROLS.map((ctrl) => {
     let passed: boolean;
     if (assessment && ctrl.id in assessment) {
       const val = assessment[ctrl.id as keyof Assessment];
-      // boolean fields
       if (typeof val === "boolean") passed = val;
-      // roadmap items default to false unless explicitly true
       else passed = ctrl.defaultStatus === "passed";
     } else {
       passed = ctrl.defaultStatus === "passed";
@@ -128,7 +141,7 @@ const CompliancePage = async () => {
   const { data: recentIssues } = await svc
     .from("scan_issues")
     .select("type")
-    .eq("organization_id", membership.organization_id);
+    .eq("organization_id", orgContext.organizationId);
 
   const issueTypes = (recentIssues ?? []).map((i: { type: string }) => i.type);
   const triggeredOwaspIds = getTriggeredOwaspIds(issueTypes);
@@ -147,6 +160,16 @@ const CompliancePage = async () => {
         )}
       </div>
 
+      {/* Notice when no assessment exists but servers exist — using platform defaults */}
+      {!assessment && (
+        <div className="rounded-lg border border-white/10 bg-white/5 px-4 py-3">
+          <p className="text-sm text-slate-400">
+            No assessment on record yet — scores below reflect platform defaults.
+            Run a scan on one of your servers to generate a compliance assessment.
+          </p>
+        </div>
+      )}
+
       {/* 3-column layout */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Col 1: Score + Badges + PDF */}
@@ -157,10 +180,10 @@ const CompliancePage = async () => {
               {passedCount} / {activeControls.length} controls active
             </p>
             <div className="flex flex-wrap gap-2 mt-4 justify-center">
-              <Badge variant="outline" className="border-blue-500/30 text-blue-400 text-xs">
+              <Badge variant="outline" className="border-monitor/30 text-monitor text-xs">
                 NSA MCP CSI
               </Badge>
-              <Badge variant="outline" className="border-orange-500/30 text-orange-400 text-xs">
+              <Badge variant="outline" className="border-caution/30 text-caution text-xs">
                 OWASP MCP Top 10
               </Badge>
             </div>
@@ -184,12 +207,6 @@ const CompliancePage = async () => {
 
             {/* Request PDF Report */}
             <RequestPdfButton />
-
-            {!assessment && (
-              <p className="text-[10px] text-slate-500 text-center">
-                No assessment on record yet — scores reflect platform defaults.
-              </p>
-            )}
           </CardContent>
         </Card>
 
@@ -224,7 +241,7 @@ const CompliancePage = async () => {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-emerald-400 flex items-center gap-2">
+              <p className="text-sm flex items-center gap-2" style={{ color: "var(--secure)" }}>
                 <CheckCircle2 className="size-4" />
                 All controls passing
               </p>

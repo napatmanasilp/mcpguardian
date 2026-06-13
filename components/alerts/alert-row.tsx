@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
+import { useRealtime } from "@/components/providers/realtime-provider";
 import { cn } from "@/lib/utils";
 import type { Alert } from "@/lib/types/alerts";
 
@@ -13,18 +15,24 @@ interface AlertRowProps {
 
 export function AlertRow({ alert }: AlertRowProps) {
   const router = useRouter();
-  const [isNavigating, setIsNavigating] = useState(false);
+  const { decrementAlertCount, incrementAlertCount } = useRealtime();
+
+  // Optimistic local state for read status
+  const [optimisticRead, setOptimisticRead] = useState(alert.read);
+
+  // In-flight flag to prevent duplicate clicks (Req 17.5)
+  const inFlightRef = useRef(false);
 
   const severityIcon = (severity: string) => {
     switch (severity.toLowerCase()) {
       case "critical":
-        return <span className="size-3 rounded-full bg-red-500 shrink-0" />;
+        return <span className="size-3 rounded-full bg-threat shrink-0" />;
       case "high":
-        return <span className="size-3 rounded-full bg-orange-500 shrink-0" />;
+        return <span className="size-3 rounded-full bg-threat shrink-0" />;
       case "medium":
-        return <span className="size-3 rounded-full bg-yellow-500 shrink-0" />;
+        return <span className="size-3 rounded-full bg-caution shrink-0" />;
       default:
-        return <span className="size-3 rounded-full bg-blue-500 shrink-0" />;
+        return <span className="size-3 rounded-full bg-monitor shrink-0" />;
     }
   };
 
@@ -52,31 +60,61 @@ export function AlertRow({ alert }: AlertRowProps) {
     return "/activity";
   };
 
-  const handleClick = async () => {
-    if (isNavigating) return;
-    setIsNavigating(true);
+  const handleClick = useCallback(async () => {
+    // Ignore duplicate clicks while in flight (Req 17.5)
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    const wasUnread = !optimisticRead;
+
+    // Step 1: Optimistic update — mark as read immediately (< 100ms) (Req 17.1)
+    if (wasUnread) {
+      setOptimisticRead(true);
+      decrementAlertCount();
+    }
 
     try {
-      // Step 1: Mark alert as read
+      // Step 2: Fire server action in background
       const res = await fetch(`/api/alerts/${alert.id}/mark-read`, {
         method: "POST",
       });
 
-      // Step 2: Resolve navigation target
+      // Step 3: Resolve navigation target
       let target = resolveTarget();
 
       // Handle 404 — the referenced session/server no longer exists
       if (res.status === 404) {
+        // Revert optimistic update on failure (Req 17.2)
+        if (wasUnread) {
+          setOptimisticRead(false);
+          incrementAlertCount();
+        }
+        toast.error("Could not mark alert as read");
+        target = "/activity";
+      } else if (!res.ok) {
+        // Server action failed — revert + toast (Req 17.2)
+        if (wasUnread) {
+          setOptimisticRead(false);
+          incrementAlertCount();
+        }
+        toast.error("Could not mark alert as read");
         target = "/activity";
       }
 
-      // Step 3: Navigate
+      // Step 4: Navigate
       router.push(target);
     } catch {
-      // On network error, fall back to /activity
+      // Network error — revert optimistic update + toast (Req 17.2)
+      if (wasUnread) {
+        setOptimisticRead(false);
+        incrementAlertCount();
+      }
+      toast.error("Could not mark alert as read");
       router.push("/activity");
+    } finally {
+      inFlightRef.current = false;
     }
-  };
+  }, [alert.id, optimisticRead, decrementAlertCount, incrementAlertCount, router]);
 
   return (
     <div
@@ -91,9 +129,9 @@ export function AlertRow({ alert }: AlertRowProps) {
       }}
       className={cn(
         "flex items-start gap-4 rounded-lg border px-4 py-3 transition-colors hover:bg-white/[0.03] cursor-pointer",
-        isNavigating && "opacity-60 pointer-events-none",
-        !alert.read
-          ? "border-l-4 border-l-blue-500 border-white/10 bg-[hsl(222,47%,6%)]"
+        inFlightRef.current && "opacity-60 pointer-events-none",
+        !optimisticRead
+          ? "border-l-4 border-l-monitor border-white/10 bg-[hsl(222,47%,6%)]"
           : "border-white/5 bg-white/[0.02]",
       )}
     >
@@ -106,7 +144,7 @@ export function AlertRow({ alert }: AlertRowProps) {
             <p
               className={cn(
                 "text-sm font-medium truncate",
-                !alert.read ? "text-slate-200" : "text-slate-400",
+                !optimisticRead ? "text-slate-200" : "text-slate-400",
               )}
             >
               {alert.title}
@@ -132,8 +170,8 @@ export function AlertRow({ alert }: AlertRowProps) {
           </p>
         </div>
       </div>
-      {!alert.read && (
-        <span className="mt-1.5 size-2 shrink-0 rounded-full bg-blue-500" />
+      {!optimisticRead && (
+        <span className="mt-1.5 size-2 shrink-0 rounded-full bg-monitor" />
       )}
     </div>
   );

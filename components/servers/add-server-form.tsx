@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { Globe, Loader2, Plus, Terminal } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,54 +16,32 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { addServer } from "@/lib/actions/servers";
+import { type ActionState } from "@/lib/types/settings";
+
+const initialState: ActionState = {};
 
 export function AddServerForm() {
-  const router = useRouter();
-  const [serverName, setServerName] = useState("");
+  const [state, formAction, isPending] = useActionState(
+    addServer,
+    initialState,
+  );
   const [transportType, setTransportType] = useState<"http" | "stdio">("http");
-  const [endpointUrl, setEndpointUrl] = useState("");
-  const [stdioCommand, setStdioCommand] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
-  const canSubmit =
-    serverName.trim().length >= 1 &&
-    serverName.trim().length <= 253 &&
-    (transportType === "http" ? endpointUrl.trim() : stdioCommand.trim());
+  // Track previous state to detect changes
+  const prevStateRef = useRef(state);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canSubmit || isSubmitting) return;
+  useEffect(() => {
+    if (state === prevStateRef.current) return;
+    prevStateRef.current = state;
 
-    setError(null);
-    setIsSubmitting(true);
-
-    try {
-      const res = await fetch("/api/servers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: serverName.trim(),
-          transportType,
-          endpointUrl: transportType === "http" ? endpointUrl.trim() : undefined,
-          stdioCommand: transportType === "stdio" ? stdioCommand.trim() : undefined,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data?.error?.message ?? "Failed to add server. Please try again.");
-        return;
-      }
-
-      router.push("/servers");
-    } catch {
-      setError("An unexpected error occurred. Please try again.");
-    } finally {
-      setIsSubmitting(false);
+    if (state.success) {
+      toast.success("Server added successfully.");
+    } else if (state.error) {
+      toast.error(state.error);
     }
-  };
+  }, [state]);
 
   return (
     <Card className="w-full max-w-lg border-white/10 bg-bg-base">
@@ -74,21 +52,30 @@ export function AddServerForm() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form ref={formRef} action={formAction} className="space-y-5">
+          {/* Hidden transport field for the server action */}
+          <input type="hidden" name="transport" value={transportType} />
+
           {/* Server Name */}
           <div className="space-y-2">
             <Label htmlFor="serverName">Server name</Label>
             <Input
               id="serverName"
+              name="name"
               placeholder="production-db"
-              value={serverName}
-              onChange={(e) => setServerName(e.target.value)}
               required
               minLength={1}
               maxLength={253}
-              className="border-white/10 bg-white/5"
+              className={cn(
+                "border-white/10 bg-white/5",
+                state.fieldErrors?.name && "border-red-500/50",
+              )}
             />
-            <p className="text-xs text-white/40">1–253 characters</p>
+            {state.fieldErrors?.name ? (
+              <p className="text-xs text-threat">{state.fieldErrors.name}</p>
+            ) : (
+              <p className="text-xs text-white/40">1–253 characters</p>
+            )}
           </div>
 
           {/* Transport Type Toggle */}
@@ -101,14 +88,14 @@ export function AddServerForm() {
                 className={cn(
                   "flex flex-col gap-2 p-4 rounded-lg border-2 text-left transition-all duration-150",
                   transportType === "http"
-                    ? "border-blue-500 bg-blue-500/10"
+                    ? "border-monitor bg-monitor/10"
                     : "border-white/10 bg-white/5 hover:border-white/20",
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <Globe className="size-4 text-blue-400" />
+                  <Globe className="size-4 text-monitor" />
                   <span className="font-medium text-sm text-slate-200">HTTP</span>
-                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[9px] ml-auto">
+                  <Badge className="bg-secure/20 text-secure border-secure/30 text-[9px] ml-auto">
                     Recommended
                   </Badge>
                 </div>
@@ -120,14 +107,14 @@ export function AddServerForm() {
                 className={cn(
                   "flex flex-col gap-2 p-4 rounded-lg border-2 text-left transition-all duration-150",
                   transportType === "stdio"
-                    ? "border-amber-500 bg-amber-500/10"
+                    ? "border-caution bg-caution/10"
                     : "border-white/10 bg-white/5 hover:border-white/20",
                 )}
               >
                 <div className="flex items-center gap-2">
-                  <Terminal className="size-4 text-amber-400" />
+                  <Terminal className="size-4 text-caution" />
                   <span className="font-medium text-sm text-slate-200">STDIO</span>
-                  <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[9px] ml-auto">
+                  <Badge className="bg-caution/20 text-caution border-caution/30 text-[9px] ml-auto">
                     ⚠ Limited
                   </Badge>
                 </div>
@@ -142,31 +129,41 @@ export function AddServerForm() {
               <Label htmlFor="endpointUrl">Endpoint URL</Label>
               <Input
                 id="endpointUrl"
+                name="endpoint"
                 placeholder="https://mcp.example.com"
-                value={endpointUrl}
-                onChange={(e) => setEndpointUrl(e.target.value)}
                 required
-                className="border-white/10 bg-white/5"
+                className={cn(
+                  "border-white/10 bg-white/5",
+                  state.fieldErrors?.endpoint && "border-red-500/50",
+                )}
               />
+              {state.fieldErrors?.endpoint && (
+                <p className="text-xs text-threat">{state.fieldErrors.endpoint}</p>
+              )}
             </div>
           ) : (
             <div className="space-y-2">
               <Label htmlFor="stdioCommand">STDIO command</Label>
               <Input
                 id="stdioCommand"
+                name="command"
                 placeholder="npx -y @modelcontextprotocol/server-filesystem"
-                value={stdioCommand}
-                onChange={(e) => setStdioCommand(e.target.value)}
                 required
-                className="border-white/10 bg-white/5"
+                className={cn(
+                  "border-white/10 bg-white/5",
+                  state.fieldErrors?.command && "border-red-500/50",
+                )}
               />
+              {state.fieldErrors?.command && (
+                <p className="text-xs text-threat">{state.fieldErrors.command}</p>
+              )}
             </div>
           )}
 
-          {/* Error Message */}
-          {error && (
-            <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-              {error}
+          {/* Form-level Error Message */}
+          {state.error && (
+            <p className="text-sm text-threat bg-threat/10 border border-threat/20 rounded-lg px-3 py-2">
+              {state.error}
             </p>
           )}
 
@@ -174,14 +171,14 @@ export function AddServerForm() {
           <Button
             type="submit"
             className="w-full gap-2"
-            disabled={!canSubmit || isSubmitting}
+            disabled={isPending}
           >
-            {isSubmitting ? (
+            {isPending ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <Plus className="size-4" />
             )}
-            {isSubmitting ? "Adding server..." : "Add Server"}
+            {isPending ? "Adding server..." : "Add Server"}
           </Button>
         </form>
       </CardContent>

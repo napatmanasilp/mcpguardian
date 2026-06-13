@@ -92,7 +92,7 @@ export const PLAN_HEADERS = ["Free", "Developer", "Team", "Startup", "Enterprise
 
 export function CellContent({ value }: { value: FeatureValue }) {
   if (value === true) {
-    return <Check className="size-4 text-emerald-400 mx-auto" />;
+    return <Check className="size-4 text-secure mx-auto" />;
   }
   if (value === false) {
     return <Minus className="size-4 text-slate-600 mx-auto" />;

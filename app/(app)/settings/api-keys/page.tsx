@@ -1,32 +1,29 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Key, Trash2 } from "lucide-react";
 
+export const metadata: Metadata = {
+  title: "API Keys — MCPGuardian",
+  description: "Create and manage API keys for programmatic access to MCPGuardian.",
+};
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
 import { CreateApiKeyDialog } from "./create-api-key-dialog";
 
 const ApiKeysPage = async () => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const orgContext = await getOrgContext();
+  if (!orgContext) redirect("/onboarding");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
-
-  if (!membership) redirect("/onboarding");
 
   const { data: apiKeys } = await svc
     .from("api_keys")
     .select("id, name, key_prefix, scopes, last_used_at, created_at, is_active")
-    .eq("user_id", user.id)
+    .eq("user_id", orgContext.userId)
     .order("created_at", { ascending: false });
 
   return (

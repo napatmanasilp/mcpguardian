@@ -1,7 +1,13 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { LoginForm } from "@/components/auth/login-form";
 import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = {
+  title: "Log In — MCPGuardian",
+  description: "Sign in to your MCPGuardian account to manage MCP server security.",
+};
 
 interface LoginPageProps {
   searchParams: Promise<{ redirectTo?: string }>;

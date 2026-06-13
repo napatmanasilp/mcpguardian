@@ -1,31 +1,29 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Activity, ArrowRight, Server } from "lucide-react";
 
+export const metadata: Metadata = {
+  title: "Telemetry — MCPGuardian",
+  description: "Monitor server health metrics, latency sparklines, and uptime percentages.",
+};
+
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkline } from "@/components/telemetry/sparkline";
-import { createClient } from "@/lib/supabase/server";
+import { EmptyState } from "@/components/ui/empty-state";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
+import { EMPTY_STATES } from "@/lib/ui/empty-states";
 import { computeUptime, hasInsufficientData } from "@/lib/utils/telemetry";
 import { cn } from "@/lib/utils";
 
 const TelemetryPage = async () => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const ctx = await getOrgContext();
+  if (!ctx) redirect("/onboarding");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
-
-  if (!membership) redirect("/onboarding");
-
-  const orgId = membership.organization_id;
+  const orgId = ctx.organizationId;
 
   // Calculate the date 30 days ago for health metrics query
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -68,6 +66,21 @@ const TelemetryPage = async () => {
     ? Math.round(healthMetrics.reduce((s, h) => s + (h.latency_ms ?? 0), 0) / healthMetrics.length)
     : null;
 
+  // Empty state: no servers means no telemetry data
+  if (servers.length === 0) {
+    return (
+      <main className="flex flex-1 flex-col gap-6 p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Telemetry</p>
+            <h1 className="text-2xl font-bold tracking-tight">Telemetry Overview</h1>
+          </div>
+        </div>
+        <EmptyState {...EMPTY_STATES["telemetry"]} />
+      </main>
+    );
+  }
+
   return (
     <main className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
@@ -75,7 +88,7 @@ const TelemetryPage = async () => {
           <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Telemetry</p>
           <h1 className="text-2xl font-bold tracking-tight">Telemetry Overview</h1>
         </div>
-        <Link href="/activity" className="text-xs text-blue-400 hover:underline">
+        <Link href="/activity" className="text-xs text-monitor hover:underline">
           View full log →
         </Link>
       </div>
@@ -84,13 +97,13 @@ const TelemetryPage = async () => {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
           <CardContent className="p-4 text-center">
-            <p className="text-lg font-bold font-mono text-blue-400">{servers.length}</p>
+            <p className="text-lg font-bold font-mono text-monitor">{servers.length}</p>
             <p className="text-[10px] text-slate-500">Servers</p>
           </CardContent>
         </Card>
         <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
           <CardContent className="p-4 text-center">
-            <p className="text-lg font-bold font-mono text-emerald-400">{activeSessions}</p>
+            <p className="text-lg font-bold font-mono text-secure">{activeSessions}</p>
             <p className="text-[10px] text-slate-500">Active Sessions</p>
           </CardContent>
         </Card>
@@ -136,10 +149,10 @@ const TelemetryPage = async () => {
                 <Link key={srv.id} href={`/servers/${srv.id}/telemetry`}>
                   <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-2.5 hover:bg-white/10 transition-colors">
                     <div className="flex items-center gap-3">
-                      <div className={cn("size-2 rounded-full shrink-0", reachableServers.has(srv.id) ? "bg-emerald-500" : "bg-red-500")} />
+                      <div className={cn("size-2 rounded-full shrink-0", reachableServers.has(srv.id) ? "bg-secure" : "bg-threat")} />
                       <span className="text-sm text-slate-200">{srv.name}</span>
                       {srv.risk_score != null && (
-                        <span className={cn("text-xs font-mono", srv.risk_score >= 70 ? "text-red-400" : srv.risk_score >= 40 ? "text-amber-400" : "text-emerald-400")}>
+                        <span className={cn("text-xs font-mono", srv.risk_score >= 70 ? "text-threat" : srv.risk_score >= 40 ? "text-caution" : "text-secure")}>
                           {srv.risk_score}/100
                         </span>
                       )}
@@ -179,7 +192,7 @@ const TelemetryPage = async () => {
               <div key={i} className="flex items-center gap-3 rounded-md bg-white/5 px-3 py-2 text-xs">
                 <div className={cn(
                   "size-2 rounded-full shrink-0",
-                  inv.was_blocked ? "bg-red-500" : inv.threat_type ? "bg-amber-500" : "bg-emerald-500",
+                  inv.was_blocked ? "bg-threat" : inv.threat_type ? "bg-caution" : "bg-secure",
                 )} />
                 <span className="font-mono text-slate-300 flex-1 truncate">{inv.tool_name}</span>
                 {inv.threat_type && <Badge variant="destructive" className="text-[9px]">{inv.threat_type}</Badge>}

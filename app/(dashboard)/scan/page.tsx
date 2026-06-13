@@ -2,18 +2,33 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Loader2, ScanSearch } from "lucide-react";
 import { toast } from "sonner";
 
 import { ScanBlockedModal } from "@/components/billing/scan-blocked-modal";
 import { Button } from "@/components/ui/button";
+import { DynamicErrorBoundary } from "@/components/ui/dynamic-error-boundary";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ScanResults } from "@/components/scan-results";
+import { PageSkeleton } from "@/components/ui/page-skeleton";
 import { canScan, useUsage } from "@/lib/usage";
 import { cn } from "@/lib/utils";
 import type { ScanResult } from "@/lib/scanner/types";
+
+// Code-split: ScanResults is a very large client component (500+ lines with sub-components).
+// Only rendered after a scan completes, not needed on initial page load.
+// Requirement 20.1: code-split client components > 50 KB not needed on initial render
+const ScanResults = dynamic(
+  () => import("@/components/scan-results").then((mod) => mod.ScanResults),
+  {
+    ssr: false,
+    loading: () => (
+      <PageSkeleton blocks={[{ type: "chart", height: "16rem" }, { type: "table", height: "12rem" }]} />
+    ),
+  },
+);
 
 // ─── Preset Configurations ─────────────────────────────────────────────
 
@@ -422,7 +437,9 @@ const ScanPage = () => {
               </Link>
             )}
           </div>
-          <ScanResults result={result} config={config} onReset={handleScanAnother} />
+          <DynamicErrorBoundary componentName="Scan Results">
+            <ScanResults result={result} config={config} onReset={handleScanAnother} />
+          </DynamicErrorBoundary>
         </div>
       )}
     </main>

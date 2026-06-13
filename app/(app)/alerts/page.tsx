@@ -1,32 +1,30 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Bell, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 
 import { AlertRow } from "@/components/alerts/alert-row";
+import { MarkAllReadButton } from "@/components/alerts/mark-all-read-button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { createClient } from "@/lib/supabase/server";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
+import { EMPTY_STATES } from "@/lib/ui/empty-states";
 import { cn } from "@/lib/utils";
+
+export const metadata = {
+  title: "Alerts — MCPGuardian",
+  description: "View and manage security alerts for your MCP servers.",
+};
 
 const AlertsPage = async ({
   searchParams,
 }: {
   searchParams: Promise<{ severity?: string; status?: string }>;
 }) => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const orgCtx = await getOrgContext();
+  if (!orgCtx) redirect("/onboarding");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
-
-  if (!membership) redirect("/onboarding");
 
   const params = await searchParams;
   const severityFilter = params.severity || "";
@@ -35,10 +33,9 @@ const AlertsPage = async ({
   let query = svc
     .from("alerts")
     .select("id, alert_type, severity, title, message, read, created_at, organization_id, session_id, server_id")
-    .eq("organization_id", membership.organization_id);
+    .eq("organization_id", orgCtx.organizationId);
 
   if (severityFilter && ["critical", "high", "medium"].includes(severityFilter)) {
-    // Case-insensitive match — DB stores uppercase (e.g., "CRITICAL"), filters use lowercase
     query = query.ilike("severity", severityFilter);
   }
 
@@ -72,33 +69,7 @@ const AlertsPage = async ({
         </div>
         <div className="flex items-center gap-2">
           {hasUnread && (
-            <form
-              action={async () => {
-                "use server";
-                const s = await createClient();
-                const { data: { user: u } } = await s.auth.getUser();
-                if (u) {
-                  const sv = createServiceClient();
-                  const { data: m } = await sv
-                    .from("organization_members")
-                    .select("organization_id")
-                    .eq("user_id", u.id)
-                    .eq("invitation_status", "accepted")
-                    .single();
-                  if (m) {
-                    await sv
-                      .from("alerts")
-                      .update({ read: true })
-                      .eq("organization_id", m.organization_id)
-                      .eq("read", false);
-                  }
-                }
-              }}
-            >
-              <Button type="submit" variant="outline" size="sm" className="border-white/10">
-                Mark All Read
-              </Button>
-            </form>
+            <MarkAllReadButton />
           )}
           <Link href="/activity">
             <Button variant="outline" size="sm" className="border-white/10 gap-1.5">
@@ -174,27 +145,7 @@ const AlertsPage = async ({
           ))}
         </div>
       ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center gap-4 py-12 text-center">
-            <Bell className="size-12 text-slate-600/40" />
-            <div>
-              <p className="text-lg font-medium text-slate-200">No alerts</p>
-              <p className="text-sm text-slate-400">
-                {severityFilter || statusFilter
-                  ? "Try changing the filter"
-                  : "Your MCP servers are looking good. We'll notify you if anything changes."}
-              </p>
-            </div>
-            {!severityFilter && !statusFilter && (
-              <Link href="/activity">
-                <Button variant="outline" size="sm" className="border-white/10 gap-1.5">
-                  <ExternalLink className="size-3.5" />
-                  View Activity Timeline
-                </Button>
-              </Link>
-            )}
-          </CardContent>
-        </Card>
+        <EmptyState {...EMPTY_STATES["alerts"]} />
       )}
     </main>
   );

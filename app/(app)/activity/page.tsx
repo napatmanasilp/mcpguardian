@@ -1,79 +1,85 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 
-import { createClient } from "@/lib/supabase/server";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
-import type { MergedEvent } from "@/lib/types/activity";
 import { ActivityPageClient } from "@/components/activity/activity-page-client";
+import { EmptyState } from "@/components/ui/empty-state";
+import { EMPTY_STATES } from "@/lib/ui/empty-states";
+import type { MergedEvent } from "@/lib/types/activity";
 
 export const metadata: Metadata = {
   title: "Threat Log — MCPGuardian",
+  description: "View detected security threats and tool invocation anomalies.",
 };
 
-const ActivityPage = async () => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+export default async function ActivityPage() {
+  const orgContext = await getOrgContext();
+  if (!orgContext) redirect("/onboarding");
 
+  const { organizationId } = orgContext;
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
 
-  if (!membership) redirect("/onboarding");
+  const { data: threats, error } = await svc
+    .from("tool_invocation_logs")
+    .select("id, tool_name, mcp_server_id, was_blocked, threat_type, description, severity, session_id, created_at")
+    .eq("organization_id", organizationId)
+    .not("threat_type", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(50);
 
-  const [threatsResult, alertsResult] = await Promise.all([
-    svc
-      .from("tool_invocation_logs")
-      .select("id, tool_name, mcp_server_id, was_blocked, threat_type, latency_ms, session_id, created_at")
-      .eq("organization_id", membership.organization_id)
-      .not("threat_type", "is", null)
-      .order("created_at", { ascending: false })
-      .limit(50),
-    svc
-      .from("alerts")
-      .select("id, alert_type, severity, title, message, session_id, server_id, created_at, read")
-      .eq("organization_id", membership.organization_id)
-      .order("created_at", { ascending: false })
-      .limit(50),
-  ]);
+  if (error) {
+    throw new Error(error.message ?? "Failed to load threat log data");
+  }
 
-  const threats = threatsResult.data ?? [];
-  const alerts = alertsResult.data ?? [];
+  const events: MergedEvent[] = (threats ?? []).map((t) => ({
+    id: t.id,
+    type: "threat" as const,
+    title: t.tool_name ?? "Unknown",
+    description: t.description ?? `Threat: ${t.threat_type}`,
+    severity: mapSeverity(t.severity, t.was_blocked),
+    session_id: t.session_id ?? null,
+    server_id: t.mcp_server_id ?? null,
+    createdAt: t.created_at,
+  }));
 
-  // Merge and sort by created_at
-  const allEvents: MergedEvent[] = [
-    ...threats.map((t) => ({
-      id: t.id,
-      type: "threat" as const,
-      title: t.threat_type ?? "Unknown threat",
-      description: `Tool: ${t.tool_name}`,
-      severity: t.was_blocked ? "critical" as const : "high" as const,
-      session_id: t.session_id ?? null,
-      server_id: t.mcp_server_id ?? null,
-      createdAt: t.created_at,
-    })),
-    ...alerts.filter((a) => a.severity === "CRITICAL" || a.severity === "HIGH").map((a) => ({
-      id: a.id,
-      type: "alert" as const,
-      title: a.title,
-      description: a.message,
-      severity: (a.severity?.toLowerCase() ?? "medium") as "critical" | "high" | "medium",
-      session_id: a.session_id ?? null,
-      server_id: a.server_id ?? null,
-      createdAt: a.created_at,
-    })),
-  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (events.length === 0) {
+    const emptyConfig = EMPTY_STATES["activity"];
+    return (
+      <main className="flex flex-1 flex-col gap-6 p-4 md:p-6 overflow-x-hidden">
+        <div>
+          <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Activity</p>
+          <h1 className="text-2xl font-bold tracking-tight">Threat Log</h1>
+        </div>
+        <EmptyState
+          icon={emptyConfig.icon}
+          heading={emptyConfig.heading}
+          description={emptyConfig.description}
+          cta={emptyConfig.cta}
+        />
+      </main>
+    );
+  }
 
   return (
     <ActivityPageClient
-      initialEvents={allEvents}
-      organizationId={membership.organization_id}
+      initialEvents={events}
+      organizationId={organizationId}
     />
   );
-};
+}
 
-export default ActivityPage;
+/** Maps raw severity from the database or derives it from was_blocked */
+function mapSeverity(
+  severity: string | null | undefined,
+  wasBlocked: boolean
+): "critical" | "high" | "medium" {
+  if (severity) {
+    const lower = severity.toLowerCase();
+    if (lower === "critical") return "critical";
+    if (lower === "high") return "high";
+    if (lower === "medium" || lower === "warning") return "medium";
+  }
+  // Fallback: blocked → critical, otherwise high
+  return wasBlocked ? "critical" : "high";
+}

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ArrowLeft, Radar, Shield } from "lucide-react";
@@ -6,35 +7,39 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { createClient } from "@/lib/supabase/server";
+import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ sessionId: string }>;
+}): Promise<Metadata> {
+  const { sessionId } = await params;
+  const shortId = sessionId.slice(0, 8);
+  return {
+    title: `Session ${shortId}… — MCPGuardian`,
+    description: `Proxy session details and tool invocation log for session ${shortId}.`.slice(0, 160),
+  };
+}
 
 const SessionDetailPage = async ({
   params,
 }: {
   params: Promise<{ sessionId: string }>;
 }) => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const org = await getOrgContext();
+  if (!org) redirect("/onboarding");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
-
-  if (!membership) redirect("/onboarding");
   const { sessionId } = await params;
 
   const { data: session } = await svc
     .from("proxy_sessions")
     .select("*")
     .eq("id", sessionId)
-    .eq("organization_id", membership.organization_id)
+    .eq("organization_id", org.organizationId)
     .single();
 
   if (!session) notFound();
@@ -69,8 +74,8 @@ const SessionDetailPage = async ({
               variant="outline"
               className={cn(
                 "text-[10px]",
-                session.status === "active" && "border-emerald-500/30 text-emerald-400",
-                (session.status === "terminated_threat" || session.status === "terminated_rug_pull") && "border-red-500/30 text-red-400",
+                session.status === "active" && "border-secure/30 text-secure",
+                (session.status === "terminated_threat" || session.status === "terminated_rug_pull") && "border-threat/30 text-threat",
                 session.status === "terminated_clean" && "border-slate-500/30 text-slate-400",
                 session.status === "expired" && "border-slate-500/30 text-slate-400",
               )}
@@ -129,7 +134,7 @@ const SessionDetailPage = async ({
               <div key={i} className="flex items-center gap-3 rounded-md bg-white/5 px-3 py-2 text-xs">
                 <div className={cn(
                   "size-2 rounded-full shrink-0",
-                  tc.was_blocked ? "bg-red-500" : tc.threat_type ? "bg-amber-500" : "bg-emerald-500",
+                  tc.was_blocked ? "bg-threat" : tc.threat_type ? "bg-caution" : "bg-secure",
                 )} />
                 <span className="font-mono text-slate-300 flex-1 truncate">{tc.tool_name}</span>
                 {tc.permission_level && (

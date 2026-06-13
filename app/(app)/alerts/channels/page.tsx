@@ -1,6 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Bell, Plus } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Alert Channels — MCPGuardian",
+  description: "Configure notification channels for security alerts.",
+};
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";

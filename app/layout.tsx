@@ -20,6 +20,12 @@ export const metadata: Metadata = {
   title: "MCPGuardian — MCP Security Scanner",
   description:
     "Scan MCP server configurations for security vulnerabilities and get continuous monitoring.",
+  openGraph: {
+    siteName: "MCPGuardian",
+    type: "website",
+    description:
+      "Scan MCP server configurations for security vulnerabilities and get continuous monitoring.",
+  },
 };
 
 const RootLayout = ({
