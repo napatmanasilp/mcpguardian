@@ -81,10 +81,10 @@ export default async function DashboardPage() {
     { data: servers },
     { count: unreadAlerts },
     { data: lastScanData },
-    { data: recentThreats },
+    recentThreatsResult,
     { count: activeSessions },
-    { count: toolCallsToday },
-    { count: blockedToday },
+    toolCallsTodayResult,
+    blockedTodayResult,
     { data: latencyData },
   ] = await Promise.all([
     svc
@@ -104,7 +104,7 @@ export default async function DashboardPage() {
       .eq("read", false),
     svc
       .from("scans")
-      .select("overall_score, created_at")
+      .select("risk_score, created_at")
       .eq("organization_id", orgId)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -115,7 +115,9 @@ export default async function DashboardPage() {
       .eq("organization_id", orgId)
       .not("threat_type", "is", null)
       .order("created_at", { ascending: false })
-      .limit(10),
+      .limit(10)
+      .then((r) => r)
+      .catch(() => ({ data: null, error: null })),
     svc
       .from("proxy_sessions")
       .select("*", { count: "exact", head: true })
@@ -125,13 +127,17 @@ export default async function DashboardPage() {
       .from("tool_invocation_logs")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
-      .gte("created_at", todayStart),
+      .gte("created_at", todayStart)
+      .then((r) => r)
+      .catch(() => ({ count: 0, error: null })),
     svc
       .from("tool_invocation_logs")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
       .eq("was_blocked", true)
-      .gte("created_at", todayStart),
+      .gte("created_at", todayStart)
+      .then((r) => r)
+      .catch(() => ({ count: 0, error: null })),
     svc
       .from("server_health_metrics")
       .select("latency_ms")
@@ -139,6 +145,11 @@ export default async function DashboardPage() {
       .order("recorded_at", { ascending: false })
       .limit(100),
   ]);
+
+  // Extract results with fallbacks for tables that may have schema mismatches
+  const recentThreats = recentThreatsResult?.data ?? null;
+  const toolCallsToday = toolCallsTodayResult?.count ?? 0;
+  const blockedToday = blockedTodayResult?.count ?? 0;
 
   if (!org) redirect("/onboarding");
 
@@ -263,16 +274,16 @@ export default async function DashboardPage() {
                 <p
                   className="text-2xl font-bold font-mono"
                   style={{
-                    color: lastScanData?.overall_score
-                      ? lastScanData.overall_score >= 80
+                    color: lastScanData?.risk_score
+                      ? lastScanData.risk_score >= 80
                         ? "var(--secure)"
-                        : lastScanData.overall_score >= 60
+                        : lastScanData.risk_score >= 60
                           ? "var(--caution)"
                           : "var(--threat)"
                       : "var(--muted-foreground)",
                   }}
                 >
-                  {lastScanData?.overall_score ?? "—"}
+                  {lastScanData?.risk_score ?? "—"}
                 </p>
                 <p className="text-[10px] text-slate-500 mt-0.5">Risk score</p>
               </div>
