@@ -173,6 +173,9 @@ export default async function DashboardPage() {
 
   const isFirstVisit = serverCount <= 1 && (activeSessions ?? 0) === 0 && (toolCallsToday ?? 0) === 0;
 
+  // Proxy is considered "connected" if any servers are registered or proxy was directly connected
+  const proxyIsActive = !!proxyConnectedAt || serverCount > 0;
+
   // Usage data
   const scansUsedCount = scansUsed ?? 0;
   const toolCallsUsedCount = toolCallsUsed ?? 0;
@@ -187,7 +190,7 @@ export default async function DashboardPage() {
     return (
       <main className="flex flex-1 flex-col gap-6 p-6 animate-fade-in">
         {/* Show welcome card for first-time users */}
-        <WelcomeCard proxyConnected={!!proxyConnectedAt} />
+        <WelcomeCard proxyConnected={proxyIsActive} />
         <EmptyState
           icon={emptyConfig.icon}
           heading="No servers yet"
@@ -201,7 +204,7 @@ export default async function DashboardPage() {
   return (
     <main className="flex flex-1 flex-col gap-6 p-6 animate-fade-in">
       {/* ── Welcome Card (first visit) ─────────────────────────────── */}
-      {isFirstVisit && <WelcomeCard proxyConnected={!!proxyConnectedAt} />}
+      {isFirstVisit && <WelcomeCard proxyConnected={proxyIsActive} />}
 
       {/* ── Status Strip ──────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 rounded-lg border border-white/10 bg-bg-surface px-4 py-3 text-sm">
@@ -211,7 +214,7 @@ export default async function DashboardPage() {
             <span className="relative inline-flex size-2 rounded-full bg-secure" />
           </span>
           <span className="text-slate-200 font-medium">
-            {proxyConnectedAt ? "Protected" : "Scanning"}
+            {proxyIsActive ? "Protected" : "Scanning"}
           </span>
         </div>
         <span className="text-slate-600">·</span>
@@ -231,7 +234,7 @@ export default async function DashboardPage() {
           {serverCount} server{serverCount !== 1 ? "s" : ""} online
         </span>
         <div className="ml-auto hidden sm:flex items-center gap-2">
-          {!proxyConnectedAt && (
+          {!proxyIsActive && (
             <Link href="/onboarding/proxy-setup">
               <Button size="xs" variant="outline" className="border-caution/30 text-caution h-7 text-[10px] gap-1">
                 Connect proxy <ArrowRight className="size-3" />
@@ -323,7 +326,7 @@ export default async function DashboardPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {proxyConnectedAt ? (
+            {proxyIsActive ? (
               <div className="grid grid-cols-3 gap-4 min-w-0">
                 <div className="text-center">
                   <p className="text-2xl font-bold font-mono text-slate-200">{activeSessions ?? 0}</p>
