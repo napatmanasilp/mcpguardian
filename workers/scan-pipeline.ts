@@ -200,8 +200,9 @@ export async function runScanPipeline(payload: ScanPipelinePayload): Promise<{ s
               ? "Malicious MCP server detected"
               : "High-risk MCP server detected",
           message: `Scan ${scanId} for server "${server.name}" returned risk score ${riskScore} (${overallResult}). ${scanResult.criticalIssues} critical, ${scanResult.highIssues} high issues found.`,
-          issue_key: `scan_${scanId}`,
-          recurrence_count: 1,
+          server_id: mcpServerId,
+          scan_id: scanId,
+          metadata: { issue_key: `scan_${scanId}` },
         })
         .then(() => {});
     }

@@ -32,31 +32,26 @@ export const MarketingHeader = () => {
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm text-slate-400 md:flex">
+          <a href="#how-it-works" className="transition-colors hover:text-slate-200">
+            How It Works
+          </a>
           <a href="#features" className="transition-colors hover:text-slate-200">
             Features
           </a>
           <Link href="/pricing" className="transition-colors hover:text-slate-200">
             Pricing
           </Link>
-          <Link href="/dashboard" className="transition-colors hover:text-slate-200">
-            CVE Database
+          <Link href="/nsa-mcp-compliance" className="transition-colors hover:text-slate-200">
+            Compliance
           </Link>
-          <a
-            href="/api/mcp-server"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-slate-200"
-          >
-            MCP Tool
-          </a>
         </nav>
 
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/login">Login</Link>
           </Button>
-          <Button size="sm" className="shadow-lg shadow-blue-500/20" asChild>
-            <Link href="/scan">Start Free Scan</Link>
+          <Button size="sm" className="shadow-lg shadow-blue-500/20 bg-blue-500 hover:bg-blue-600" asChild>
+            <Link href="/signup">Start Free</Link>
           </Button>
         </div>
       </div>

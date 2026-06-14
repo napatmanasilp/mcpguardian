@@ -121,7 +121,8 @@ $$;
 -- ═══════════════════════════════════════════════════════════════════════
 
 DROP TABLE IF EXISTS monitored_configs CASCADE;
-DROP TABLE IF EXISTS profiles CASCADE;
+-- NOTE: Do NOT drop profiles — it is still referenced by check-counter.ts
+-- and api-key management. It will be deprecated in a future migration.
 
 -- ═══════════════════════════════════════════════════════════════════════
 -- 5. Ensure alert_channels table exists (used by alerts/channels page)

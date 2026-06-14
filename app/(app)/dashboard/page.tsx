@@ -116,8 +116,7 @@ export default async function DashboardPage() {
       .not("threat_type", "is", null)
       .order("created_at", { ascending: false })
       .limit(10)
-      .then((r) => r)
-      .catch(() => ({ data: null, error: null })),
+      .then((r) => r, () => ({ data: null, error: null })),
     svc
       .from("proxy_sessions")
       .select("*", { count: "exact", head: true })
@@ -128,16 +127,14 @@ export default async function DashboardPage() {
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
       .gte("created_at", todayStart)
-      .then((r) => r)
-      .catch(() => ({ count: 0, error: null })),
+      .then((r) => r, () => ({ count: 0, error: null })),
     svc
       .from("tool_invocation_logs")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
       .eq("was_blocked", true)
       .gte("created_at", todayStart)
-      .then((r) => r)
-      .catch(() => ({ count: 0, error: null })),
+      .then((r) => r, () => ({ count: 0, error: null })),
     svc
       .from("server_health_metrics")
       .select("latency_ms")

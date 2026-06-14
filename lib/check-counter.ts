@@ -64,7 +64,7 @@ export async function recordCheck(
       .from("profiles")
       .select("plan, checks_purchased, scans_this_month")
       .eq("id", userId)
-      .single(),
+      .maybeSingle(),
   ]);
 
   const apiKey = apiKeyResult.data;

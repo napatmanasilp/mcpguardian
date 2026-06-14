@@ -45,7 +45,8 @@ async function terminateSession(
           ? "Rug-pull detected — session terminated"
           : "Watchdog verification failed — session terminated",
       message: reason,
-      issue_key: `watchdog_${sessionId}`,
+      session_id: sessionId,
+      metadata: { issue_key: `watchdog_${sessionId}` },
     })
     .then(() => {});
 }

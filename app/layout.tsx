@@ -17,14 +17,36 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MCPGuardian — MCP Security Scanner",
+  title: "MCPGuardian — MCP Server Security Scanner for AI Agents",
   description:
-    "Scan MCP server configurations for security vulnerabilities and get continuous monitoring.",
+    "Scan MCP servers for vulnerabilities before your AI agents connect. Detect rug-pulls, CVEs, and tool poisoning. Get the exact fixed config. Free for 50 scans/month.",
+  keywords: [
+    "MCP security",
+    "MCP scanner",
+    "MCP server security",
+    "AI agent security",
+    "Model Context Protocol",
+    "MCP vulnerability scanner",
+    "rug pull detection",
+    "tool poisoning",
+    "OWASP MCP",
+    "NSA MCP CSI",
+  ],
   openGraph: {
     siteName: "MCPGuardian",
     type: "website",
+    title: "MCPGuardian — Scan & Protect Every MCP Server Your AI Agents Use",
     description:
-      "Scan MCP server configurations for security vulnerabilities and get continuous monitoring.",
+      "Security scanner and runtime proxy for MCP servers. Scans your config, tells you what's unsafe, gives you the fix, and blocks attacks. Free tier available.",
+    url: "https://mcpguardian.com",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "MCPGuardian — MCP Server Security for AI Agents",
+    description: "Scan MCP servers for vulnerabilities. Get the exact fixed config. Block attacks at runtime.",
+  },
+  alternates: {
+    canonical: "https://mcpguardian.com",
   },
 };
 

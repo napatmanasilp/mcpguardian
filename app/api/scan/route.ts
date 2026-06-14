@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { scanMcpConfig } from "@/lib/scanner";
+import type { McpServerInput } from "@/lib/scanner/types";
 import { loadVulnerabilities } from "@/lib/scanner/cve-loader";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -8,6 +9,7 @@ import { computeConfigHash, computeToolDiff, generateRugPullIssue } from "@/lib/
 import { validateApiKey, rateLimitResponse } from "@/lib/api-key-auth";
 import { recordCheck } from "@/lib/check-counter";
 import { buildAgentDirective } from "@/lib/scanner/report-builder";
+import { generateRemediation } from "@/lib/scanner/remediation";
 import { checkAllowlist, submitForApproval } from "@/lib/registry/allowlist-manager";
 
 const requestTimestamps = new Map<string, number[]>();
@@ -108,6 +110,15 @@ export const POST = async (request: NextRequest) => {
 
     const { config } = parsed.data;
 
+    // Parse the mcpServers from config for remediation engine
+    let mcpServers: Record<string, McpServerInput> = {};
+    try {
+      const configObj = JSON.parse(config);
+      mcpServers = configObj.mcpServers ?? {};
+    } catch {
+      // Will fail later in scanMcpConfig if truly invalid
+    }
+
     const vulnerabilities = await loadVulnerabilities();
 
     let scanResult;
@@ -163,6 +174,12 @@ export const POST = async (request: NextRequest) => {
     const orgId = request.nextUrl.searchParams.get('organization_id');
     const agentDirective = buildAgentDirective(scanResult);
 
+    // ── Generate remediation (corrected config + predicted score) ─────
+    const remediation = generateRemediation(
+      mcpServers as Record<string, McpServerInput>,
+      scanResult,
+    );
+
     // ── Allowlist check for each server ──────────────────────────────
     // Run BEFORE saving to DB so the stored scan includes allowlist findings
     const allowlistStatuses: Record<string, unknown>[] = [];
@@ -198,64 +215,48 @@ export const POST = async (request: NextRequest) => {
       scanResult.score = Math.round(totalScore / scanResult.servers.length);
     }
 
-    // ── Save scan to DB (now includes allowlist findings) ────────────
+    // ── Save scan to DB (org-based `scans` table) ──────────────────────
     let scanResultId: string | undefined;
 
-    // For API-key-authenticated requests `userId` is already set above.
-    // Only fall back to session auth when apiKeyId is null (browser session path).
-    let dbUserId: string | null = apiKeyId ? userId : null;
+    // Resolve org context for the authenticated user (API key or session)
+    let resolvedOrgId = orgId; // from query param
 
-    if (!dbUserId) {
-      const supabase = await createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (user) dbUserId = user.id;
+    if (!resolvedOrgId) {
+      // Try to resolve from user's membership
+      const { data: membership } = await svc
+        .from("organization_members")
+        .select("organization_id")
+        .eq("user_id", userId)
+        .eq("invitation_status", "accepted")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      resolvedOrgId = membership?.organization_id ?? null;
     }
 
-    if (dbUserId) {
-      // Use the anon Supabase client only for the session-auth path since RLS
-      // requires the user's JWT. For API-key paths we use the service client
-      // (already created as `svc` above) to bypass RLS.
-      const supabase = apiKeyId ? svc : await createClient();
-      const { data: profileData, error: profileError } = await supabase
-        .from("profiles")
-        .select("plan, scans_this_month, max_scans, checks_purchased")
-        .eq("id", dbUserId)
+    if (resolvedOrgId) {
+      // Check org scan quota using tier-catalog limits
+      const { data: orgData } = await svc
+        .from("organizations")
+        .select("plan_id, scans_used_this_period")
+        .eq("id", resolvedOrgId)
         .single();
-      let profile = profileData;
 
-      if (profileError && profileError.code === "PGRST116") {
-        const { error: createError } = await svc.from("profiles").insert({
-          id: dbUserId,
-          email: "",
-        });
-        if (createError) {
-          console.error("Failed to create profile:", createError);
-          return NextResponse.json(
-            { error: "Account setup incomplete. Try signing out and back in." },
-            { status: 500 },
-          );
-        }
-        profile = { plan: "free", scans_this_month: 0, max_scans: 100, checks_purchased: 0 };
-      } else if (profileError) {
-        console.error("Failed to fetch profile:", profileError);
-      }
-
-      if (profile) {
-        const plan = profile.plan ?? "free";
-        const planLimits: Record<string, number> = {
-          free: 100,
-          developer: 2_000,
-          team: 20_000,
-          startup: 200_000,
+      if (orgData) {
+        const orgPlan = orgData.plan_id ?? "free";
+        const tierLimits: Record<string, number> = {
+          free: 50,
+          developer: 100,
+          team: 500,
+          startup: 2_000,
+          enterprise: -1,
         };
-        const checksLimit = planLimits[plan] ?? 100;
-        const checksPurchased = profile.checks_purchased ?? 0;
-        const totalAvailable = checksLimit + checksPurchased;
+        const scanLimit = tierLimits[orgPlan] ?? 50;
+        const scansUsed = orgData.scans_used_this_period ?? 0;
 
-        // Free plan: block if limit reached + no top-up credits
-        if (plan === "free" && profile.scans_this_month >= totalAvailable) {
+        // Free plan: block if limit reached
+        if (orgPlan === "free" && scanLimit !== -1 && scansUsed >= scanLimit) {
           const resetDate = new Date();
           resetDate.setMonth(resetDate.getMonth() + 1, 1);
           resetDate.setHours(0, 1, 0, 0);
@@ -263,50 +264,64 @@ export const POST = async (request: NextRequest) => {
           return NextResponse.json(
             {
               error: "check_limit_reached",
-              message: `You have used all ${totalAvailable} free checks this month.`,
+              message: `You have used all ${scanLimit} free scans this month.`,
               reset_date: resetDate.toISOString(),
-              top_up_url: "https://app.mcpguardian.com/billing/top-up",
-              upgrade_url: "https://app.mcpguardian.com/billing/upgrade",
+              upgrade_url: "https://mcpguardian.com/upgrade",
             },
             { status: 403 },
           );
         }
       }
 
-      const { data: insertedScan, error: insertError } = await supabase
-        .from("scan_results")
+      // Pick the first server for the scan record (use first scanned server)
+      const firstServer = scanResult.servers[0];
+      let mcpServerId: string | null = null;
+
+      // Try to match by URL to an existing registered server
+      if (firstServer?.serverUrl) {
+        const { data: existingServer } = await svc
+          .from("mcp_servers")
+          .select("id")
+          .eq("organization_id", resolvedOrgId)
+          .eq("endpoint_url", firstServer.serverUrl)
+          .limit(1)
+          .maybeSingle();
+        mcpServerId = existingServer?.id ?? null;
+      }
+
+      // Save to org-based `scans` table
+      const { data: insertedScan, error: insertError } = await svc
+        .from("scans")
         .insert({
-          user_id: dbUserId,
-          overall_grade: scanResult.grade,
-          overall_score: scanResult.score,
-          servers_scanned: scanResult.serversScanned,
-          critical_issues: scanResult.criticalIssues,
-          high_issues: scanResult.highIssues,
-          medium_issues: scanResult.mediumIssues ?? 0,
-          results: JSON.parse(JSON.stringify(scanResult)),
+          organization_id: resolvedOrgId,
+          mcp_server_id: mcpServerId ?? "00000000-0000-0000-0000-000000000000",
+          triggered_by: userId,
+          trigger_reason: "manual",
+          status: "completed",
+          overall_result:
+            scanResult.score >= 80 ? "clean" : scanResult.score >= 40 ? "suspicious" : "malicious",
+          risk_score: 100 - scanResult.score, // invert: scan score is safety, risk_score is danger
+          pipeline_steps: [],
+          findings: scanResult.servers.flatMap((s) => s.issues) as unknown as Record<string, unknown>[],
+          owasp_violations: (scanResult.complianceSummary?.owasp_mcp ?? []) as unknown as Record<string, unknown>[],
+          mitre_atlas_mappings: (scanResult.complianceSummary?.mitre_atlas ?? []) as unknown as Record<string, unknown>[],
+          nsa_csi_findings: (scanResult.complianceSummary?.nsa_csi ?? []) as unknown as Record<string, unknown>[],
+          completed_at: new Date().toISOString(),
         })
         .select("id")
         .single();
 
       if (insertError) {
         console.error("Failed to save scan result:", insertError);
-        return NextResponse.json(
-          { error: "Scan completed but failed to save." },
-          { status: 500 },
-        );
+        // Non-fatal — still return the scan result to the user
+      } else {
+        scanResultId = insertedScan?.id;
       }
-
-      scanResultId = insertedScan?.id;
 
       // Increment scan counter atomically
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ scans_this_month: (profile?.scans_this_month || 0) + 1 })
-        .eq("id", dbUserId);
-
-      if (updateError) {
-        console.error("Failed to increment scan count:", updateError);
-      }
+      svc.rpc("increment_org_scans", { org_id: resolvedOrgId }).then(() => {}).then(undefined, (err: unknown) => {
+        console.error("Failed to increment scan count:", err);
+      });
     }
 
     // ── Fire-and-forget: submit for auto-approval ────────────────────
@@ -322,6 +337,7 @@ export const POST = async (request: NextRequest) => {
     const responseBody: Record<string, unknown> = {
       ...JSON.parse(JSON.stringify(scanResult)),
       agent_directive: agentDirective,
+      remediation,
     } as Record<string, unknown>;
 
     if (scanResultId) {

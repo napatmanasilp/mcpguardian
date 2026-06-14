@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { hashApiKey } from "@/lib/api-keys";
 
 export interface ApiKeyResult {
@@ -38,7 +38,7 @@ export async function validateApiKey(
   const key = extractApiKey(request);
   if (!key) return null;
 
-  const supabase = await createClient();
+  const supabase = createServiceClient();
   const { data: apiKey } = await supabase
     .from("api_keys")
     .select("id, user_id, plan, calls_this_month, calls_limit")

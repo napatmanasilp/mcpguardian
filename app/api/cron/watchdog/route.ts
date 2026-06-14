@@ -170,8 +170,9 @@ export async function GET(request: NextRequest) {
             severity: "CRITICAL",
             title: "Watchdog detected tool list change — session terminated",
             message: `Active session ${session.id} for server ${server.id} was terminated because the tool manifest changed since last scan. This may indicate a rug-pull attack.`,
-            issue_key: `watchdog_${session.id}`,
-            recurrence_count: 1,
+            session_id: session.id,
+            server_id: server.id,
+            metadata: { issue_key: `watchdog_${session.id}` },
           })
           .then(() => {});
         alertsDispatched++;

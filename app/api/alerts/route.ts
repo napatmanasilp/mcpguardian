@@ -1,77 +1,103 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+
+import { err, ok, isError, requireUser, requireOrg } from "@/lib/api-helpers";
 
 const BulkActionSchema = z.object({
   action: z.literal("mark-all-read"),
 });
 
-export const PATCH = async (request: NextRequest) => {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+// GET /api/alerts — list alerts for the authenticated user's org
+export async function GET(request: NextRequest) {
+  const auth = await requireUser();
+  if (isError(auth)) return auth;
 
-    if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
+  const orgCtx = await requireOrg(auth.user.userId);
+  if (isError(orgCtx)) return orgCtx;
 
-    const { searchParams } = new URL(request.url);
-    const alertId = searchParams.get("id");
+  const { org, svc } = orgCtx;
+  const url = new URL(request.url);
+  const severity = url.searchParams.get("severity");
+  const unreadOnly = url.searchParams.get("unread") === "true";
+  const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 100);
 
-    if (!alertId) {
-      return NextResponse.json({ error: "id is required" }, { status: 400 });
-    }
+  let query = svc
+    .from("alerts")
+    .select("id, alert_type, severity, title, message, read, session_id, server_id, created_at")
+    .eq("organization_id", org.orgId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
-    const { error } = await supabase
-      .from("alerts")
-      .update({ read: true })
-      .eq("id", alertId)
-      .eq("user_id", user.id);
+  if (severity) query = query.eq("severity", severity);
+  if (unreadOnly) query = query.eq("read", false);
 
-    if (error) {
-      return NextResponse.json({ error: "Failed to update alert" }, { status: 500 });
-    }
+  const { data, error } = await query;
+  if (error) return err("FETCH_ERROR", "Failed to fetch alerts", 500);
 
-    return NextResponse.json({ success: true }, { status: 200 });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  return ok({ alerts: data ?? [] });
+}
+
+// PATCH /api/alerts?id=<uuid> — mark a single alert as read
+export async function PATCH(request: NextRequest) {
+  const auth = await requireUser();
+  if (isError(auth)) return auth;
+
+  const orgCtx = await requireOrg(auth.user.userId);
+  if (isError(orgCtx)) return orgCtx;
+
+  const { org, svc } = orgCtx;
+  const { searchParams } = new URL(request.url);
+  const alertId = searchParams.get("id");
+
+  if (!alertId) {
+    return err("MISSING_ID", "Alert id is required", 400);
   }
-};
 
-export const POST = async (request: NextRequest) => {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await svc
+    .from("alerts")
+    .update({ read: true })
+    .eq("id", alertId)
+    .eq("organization_id", org.orgId);
 
-    if (!user) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-    }
-
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
-    }
-
-    const parsed = BulkActionSchema.safeParse(body);
-    if (!parsed.success) {
-      return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-    }
-
-    const { data, error } = await supabase
-      .from("alerts")
-      .update({ read: true })
-      .eq("user_id", user.id)
-      .eq("read", false)
-      .select();
-
-    if (error) {
-      return NextResponse.json({ error: "Failed to update alerts" }, { status: 500 });
-    }
-
-    return NextResponse.json({ updated: data?.length || 0 }, { status: 200 });
-  } catch {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  if (error) {
+    return err("UPDATE_FAILED", "Failed to update alert", 500);
   }
-};
+
+  return ok({ success: true });
+}
+
+// POST /api/alerts — bulk actions (mark-all-read)
+export async function POST(request: NextRequest) {
+  const auth = await requireUser();
+  if (isError(auth)) return auth;
+
+  const orgCtx = await requireOrg(auth.user.userId);
+  if (isError(orgCtx)) return orgCtx;
+
+  const { org, svc } = orgCtx;
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return err("INVALID_BODY", "Invalid request body", 400);
+  }
+
+  const parsed = BulkActionSchema.safeParse(body);
+  if (!parsed.success) {
+    return err("INVALID_ACTION", "Invalid action", 400);
+  }
+
+  const { data, error } = await svc
+    .from("alerts")
+    .update({ read: true })
+    .eq("organization_id", org.orgId)
+    .eq("read", false)
+    .select("id");
+
+  if (error) {
+    return err("UPDATE_FAILED", "Failed to update alerts", 500);
+  }
+
+  return ok({ updated: data?.length ?? 0 });
+}
