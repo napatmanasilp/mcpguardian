@@ -26,7 +26,7 @@ export function RescanButton({ serverId, onSuccess }: RescanButtonProps) {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error ?? `Rescan failed (${res.status})`);
+        throw new Error(body.error?.message ?? body.error ?? `Rescan failed (${res.status})`);
       }
 
       const data = await res.json();
