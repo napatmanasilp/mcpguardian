@@ -72,14 +72,16 @@ const ServerDetailPage = async ({
 
   const { data: recentScans } = await svc
     .from("scans")
-    .select("id, overall_score, overall_result, risk_score, servers_scanned, created_at")
+    .select("id, overall_result, risk_score, status, created_at")
     .eq("organization_id", membership.organization_id)
+    .eq("mcp_server_id", serverId)
     .order("created_at", { ascending: false })
     .limit(5);
 
   const { data: recentSessions } = await svc
     .from("proxy_sessions")
-    .select("id, status, tool_call_count, created_at, terminated_at")
+    .select("id, status, tool_call_count, created_at, ended_at")
+    .eq("mcp_server_id", serverId)
     .eq("organization_id", membership.organization_id)
     .order("created_at", { ascending: false })
     .limit(5);
@@ -87,7 +89,7 @@ const ServerDetailPage = async ({
   const { data: recentHealth } = await svc
     .from("server_health_metrics")
     .select("is_reachable, latency_ms, error_rate_pct, tool_call_rate_per_minute, recorded_at")
-    .eq("server_id", serverId)
+    .eq("mcp_server_id", serverId)
     .eq("organization_id", membership.organization_id)
     .order("recorded_at", { ascending: false })
     .limit(24);
@@ -223,13 +225,13 @@ const ServerDetailPage = async ({
                   <div className="flex items-center gap-3">
                     <span className={cn(
                       "font-mono text-sm font-bold",
-                      scan.overall_score >= 80 ? "text-emerald-400" :
-                      scan.overall_score >= 60 ? "text-amber-400" :
+                      (scan.risk_score ?? 0) <= 30 ? "text-emerald-400" :
+                      (scan.risk_score ?? 0) <= 60 ? "text-amber-400" :
                       "text-red-400"
                     )}>
-                      {scan.overall_score ?? "—"}/100
+                      Risk: {scan.risk_score ?? "—"}
                     </span>
-                    <span className="text-xs text-slate-400 capitalize">{scan.overall_result ?? "unknown"}</span>
+                    <span className="text-xs text-slate-400 capitalize">{scan.overall_result ?? scan.status}</span>
                   </div>
                   <span className="text-xs text-slate-500">{new Date(scan.created_at).toLocaleString()}</span>
                 </div>
@@ -267,7 +269,7 @@ const ServerDetailPage = async ({
                     <span className="text-xs text-slate-400">{session.tool_call_count ?? 0} calls</span>
                   </div>
                   <span className="text-xs text-slate-500">
-                    {session.terminated_at ? new Date(session.terminated_at).toLocaleString() : new Date(session.created_at).toLocaleString()}
+                    {session.ended_at ? new Date(session.ended_at).toLocaleString() : new Date(session.created_at).toLocaleString()}
                   </span>
                 </div>
               </Link>
