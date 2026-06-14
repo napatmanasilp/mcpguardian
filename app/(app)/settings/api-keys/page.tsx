@@ -22,8 +22,9 @@ const ApiKeysPage = async () => {
 
   const { data: apiKeys } = await svc
     .from("api_keys")
-    .select("id, name, key_prefix, scopes, last_used_at, created_at, is_active")
+    .select("id, name, key_prefix, plan, calls_this_month, calls_limit, last_used_at, created_at, revoked")
     .eq("user_id", orgContext.userId)
+    .eq("revoked", false)
     .order("created_at", { ascending: false });
 
   return (
@@ -57,17 +58,12 @@ const ApiKeysPage = async () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  {key.scopes && (
-                    <Badge variant="outline" className="text-[9px] border-white/10">
-                      {key.scopes}
-                    </Badge>
-                  )}
-                  <Badge
-                    variant="outline"
-                    className={cn("text-[9px]", key.is_active ? "border-emerald-500/30 text-emerald-400" : "border-red-500/30 text-red-400")}
-                  >
-                    {key.is_active ? "Active" : "Inactive"}
+                  <Badge variant="outline" className="text-[9px] border-white/10">
+                    {key.plan}
                   </Badge>
+                  <span className="text-[10px] text-slate-500 font-mono">
+                    {key.calls_this_month}/{key.calls_limit}
+                  </span>
                   {key.last_used_at && (
                     <span className="text-[10px] text-slate-500">
                       Used {new Date(key.last_used_at).toLocaleDateString()}

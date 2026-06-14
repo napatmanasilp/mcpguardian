@@ -27,20 +27,21 @@ const TeamSettingsPage = async () => {
     .eq("organization_id", orgContext.organizationId)
     .order("created_at", { ascending: true });
 
-  // Resolve emails from profiles table for accepted members
+  // Resolve emails from auth.users for accepted members
   const userIds = (members ?? [])
     .filter((m) => m.user_id)
     .map((m) => m.user_id);
 
   let emailMap: Record<string, string> = {};
   if (userIds.length > 0) {
-    const { data: profiles } = await svc
-      .from("profiles")
-      .select("id, email")
-      .in("id", userIds);
-
-    if (profiles) {
-      emailMap = Object.fromEntries(profiles.map((p) => [p.id, p.email]));
+    // Use auth admin API to get user emails
+    const { data: { users } } = await svc.auth.admin.listUsers();
+    if (users) {
+      for (const u of users) {
+        if (userIds.includes(u.id) && u.email) {
+          emailMap[u.id] = u.email;
+        }
+      }
     }
   }
 

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { ServerActions } from "@/components/servers/server-actions";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { cn } from "@/lib/utils";
@@ -133,6 +134,13 @@ const ServerDetailPage = async ({
           </div>
         </div>
         <div className="flex gap-2 shrink-0">
+          <ServerActions
+            serverId={serverId}
+            serverName={server.name}
+            transportType={server.transport_type}
+            endpointUrl={server.endpoint_url}
+            stdioCommand={server.stdio_command}
+          />
           <Link href={`/servers/${serverId}/scans`}>
             <Button size="sm" variant="outline" className="border-white/10 gap-1.5">
               <FileText className="size-3.5" />
