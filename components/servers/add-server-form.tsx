@@ -125,22 +125,36 @@ export function AddServerForm() {
 
           {/* Endpoint URL (HTTP) or STDIO Command */}
           {transportType === "http" ? (
-            <div className="space-y-2">
-              <Label htmlFor="endpointUrl">Endpoint URL</Label>
-              <Input
-                id="endpointUrl"
-                name="endpoint"
-                placeholder="https://mcp.example.com"
-                required
-                className={cn(
-                  "border-white/10 bg-white/5",
-                  state.fieldErrors?.endpoint && "border-red-500/50",
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="endpointUrl">Endpoint URL</Label>
+                <Input
+                  id="endpointUrl"
+                  name="endpoint"
+                  placeholder="https://mcp.example.com"
+                  required
+                  className={cn(
+                    "border-white/10 bg-white/5",
+                    state.fieldErrors?.endpoint && "border-red-500/50",
+                  )}
+                />
+                {state.fieldErrors?.endpoint && (
+                  <p className="text-xs text-threat">{state.fieldErrors.endpoint}</p>
                 )}
-              />
-              {state.fieldErrors?.endpoint && (
-                <p className="text-xs text-threat">{state.fieldErrors.endpoint}</p>
-              )}
-            </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="authHeader">Authorization header <span className="text-white/30">(optional)</span></Label>
+                <Input
+                  id="authHeader"
+                  name="authHeader"
+                  placeholder="Bearer ${MCP_TOKEN} or leave empty for OAuth servers"
+                  className="border-white/10 bg-white/5"
+                />
+                <p className="text-xs text-white/40">
+                  If your server requires auth, provide the header value. Use {"${ENV_VAR}"} for secrets.
+                </p>
+              </div>
+            </>
           ) : (
             <div className="space-y-2">
               <Label htmlFor="stdioCommand">STDIO command</Label>

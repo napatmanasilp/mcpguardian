@@ -41,7 +41,7 @@ export async function runScanPipeline(payload: ScanPipelinePayload): Promise<{ s
     // ── Fetch MCP server config ─────────────────────────────────────
     const { data: server, error: serverError } = await svc
       .from("mcp_servers")
-      .select("name, endpoint_url, transport_type, stdio_command, stdio_args, allowlist_status")
+      .select("name, endpoint_url, transport_type, stdio_command, stdio_args, headers, allowlist_status")
       .eq("id", mcpServerId)
       .eq("organization_id", organizationId)
       .single();
@@ -52,12 +52,18 @@ export async function runScanPipeline(payload: ScanPipelinePayload): Promise<{ s
     }
 
     // Build McpServerInput from the server config
-    const serverInput = {
+    const serverInput: Record<string, unknown> = {
       name: server.name,
       url: server.endpoint_url ?? undefined,
       command: server.stdio_command ?? undefined,
       args: (server.stdio_args as string[]) ?? undefined,
     };
+
+    // Include headers if configured (so scanner knows auth is present)
+    const serverHeaders = server.headers as Record<string, string> | null;
+    if (serverHeaders && Object.keys(serverHeaders).length > 0) {
+      serverInput.headers = serverHeaders;
+    }
 
     // Wrap in a minimal MCP config JSON for scanMcpConfig
     const configJson = JSON.stringify({

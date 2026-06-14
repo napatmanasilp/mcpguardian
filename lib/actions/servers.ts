@@ -19,6 +19,7 @@ export async function addServer(
     transport: formData.get("transport") as string | null ?? "",
     endpoint: formData.get("endpoint") as string | null ?? "",
     command: formData.get("command") as string | null ?? "",
+    authHeader: formData.get("authHeader") as string | null ?? "",
   };
 
   const parsed = AddServerSchema.safeParse(raw);
@@ -44,6 +45,13 @@ export async function addServer(
 
   const svc = createServiceClient();
   const { name, transport, endpoint, command } = parsed.data;
+  const authHeader = raw.authHeader?.trim() || null;
+
+  // Build headers object if auth header is provided
+  const headers: Record<string, string> = {};
+  if (authHeader && transport === "http") {
+    headers["Authorization"] = authHeader;
+  }
 
   // Insert MCP server
   const { data: mcpServer, error: serverError } = await svc
@@ -54,6 +62,7 @@ export async function addServer(
       transport_type: transport,
       endpoint_url: transport === "http" ? (endpoint?.trim() ?? null) : null,
       stdio_command: transport === "stdio" ? (command?.trim() ?? null) : null,
+      headers: Object.keys(headers).length > 0 ? headers : {},
       allowlist_status: "monitoring",
     })
     .select("id")
