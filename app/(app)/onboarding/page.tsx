@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -96,12 +95,15 @@ export default function OnboardingPage() {
   const [orgName, setOrgName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [existingKeyPrefix, setExistingKeyPrefix] = useState<string | null>(null);
   const [showKey, setShowKey] = useState(true);
   const [keyCopied, setKeyCopied] = useState(false);
   const [configCopied, setConfigCopied] = useState(false);
   const [selectedLang, setSelectedLang] = useState<CodeLang>("curl");
   const [codeCopied, setCodeCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasOrg, setHasOrg] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   const siteOrigin =
     typeof window !== "undefined"
@@ -109,36 +111,61 @@ export default function OnboardingPage() {
       : "http://localhost:3000";
   const proxyUrl = `${siteOrigin}/api/proxy`;
 
-  // Derive org name from email on mount
+  // ── On mount: check if user already has org + key ─────────────────
   useEffect(() => {
-    const prefill = async () => {
-      const stored = sessionStorage.getItem("signup-email");
-      if (stored) {
-        const domain = stored.split("@")[1] ?? "";
-        const name = domain.split(".")[0] ?? "";
-        const derived =
-          name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, " ");
-        if (derived) setOrgName(derived);
-        return;
-      }
+    const checkExistingState = async () => {
       try {
         const supabase = createClient();
         const {
           data: { user },
         } = await supabase.auth.getUser();
-        if (user?.email) {
+
+        if (!user) {
+          setIsLoading(false);
+          return;
+        }
+
+        // Prefill org name from email
+        if (user.email) {
           const domain = user.email.split("@")[1] ?? "";
           const name = domain.split(".")[0] ?? "";
           const derived =
             name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, " ");
           if (derived) setOrgName(derived);
         }
+
+        // Check if user already has an API key (meaning org already exists)
+        const keyRes = await fetch("/api/api-keys");
+        if (keyRes.ok) {
+          const keyData = await keyRes.json();
+          const keys = keyData.keys ?? [];
+          if (keys.length > 0) {
+            // User already has an org and key — show completed state
+            setHasOrg(true);
+            setExistingKeyPrefix(keys[0].key_prefix);
+          }
+        }
       } catch {
-        // Silent — user can type manually
+        // Silent — will show form
+      } finally {
+        setIsLoading(false);
       }
     };
-    prefill();
+
+    const stored = sessionStorage.getItem("signup-email");
+    if (stored) {
+      const domain = stored.split("@")[1] ?? "";
+      const name = domain.split(".")[0] ?? "";
+      const derived =
+        name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, " ");
+      if (derived) setOrgName(derived);
+    }
+
+    checkExistingState();
   }, []);
+
+  // Determine if step 1 is complete (either just generated or already had one)
+  const step1Complete = !!apiKey || !!existingKeyPrefix;
 
   // ── Generate API Key ──────────────────────────────────────────────
   const handleGenerateKey = useCallback(async () => {
@@ -162,8 +189,9 @@ export default function OnboardingPage() {
       if (!onboardRes.ok) {
         const data = await onboardRes.json();
         // If org already exists, that's fine — continue to key generation
-        if (!data?.error?.message?.includes("already")) {
-          throw new Error(data?.error?.message ?? "Failed to set up organization");
+        const msg = data?.error?.message ?? "";
+        if (!msg.includes("already") && !msg.includes("duplicate")) {
+          throw new Error(msg || "Failed to set up organization");
         }
       }
 
@@ -177,10 +205,26 @@ export default function OnboardingPage() {
       const keyData = await keyRes.json();
 
       if (!keyRes.ok) {
+        // If max keys reached, user already has one — treat as success
+        if (keyRes.status === 403 && keyData?.error?.includes("max")) {
+          setHasOrg(true);
+          // Fetch existing key prefix
+          const existingRes = await fetch("/api/api-keys");
+          if (existingRes.ok) {
+            const existing = await existingRes.json();
+            const keys = existing.keys ?? [];
+            if (keys.length > 0) {
+              setExistingKeyPrefix(keys[0].key_prefix);
+            }
+          }
+          toast.success("You already have an API key — you're all set!");
+          return;
+        }
         throw new Error(keyData?.error ?? "Failed to generate API key");
       }
 
       setApiKey(keyData.key);
+      setHasOrg(true);
       toast.success("API key generated");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
@@ -214,6 +258,15 @@ export default function OnboardingPage() {
     setTimeout(() => setConfigCopied(false), 2000);
   }, [apiKey, proxyUrl]);
 
+  // ── Loading state ─────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center p-6">
+        <Loader2 className="size-6 animate-spin text-white/40" />
+      </div>
+    );
+  }
+
   // ── Render ────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen items-center justify-center p-6">
@@ -239,12 +292,12 @@ export default function OnboardingPage() {
               <div
                 className={cn(
                   "flex size-7 items-center justify-center rounded-full text-xs font-bold",
-                  apiKey
+                  step1Complete
                     ? "bg-emerald-500/20 text-emerald-400"
                     : "bg-blue-500/20 text-blue-400",
                 )}
               >
-                {apiKey ? <Check className="size-3.5" /> : "1"}
+                {step1Complete ? <Check className="size-3.5" /> : "1"}
               </div>
               <CardTitle className="text-base">Add an API key</CardTitle>
             </div>
@@ -254,7 +307,7 @@ export default function OnboardingPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="ml-10 space-y-4">
-            {!apiKey ? (
+            {!step1Complete ? (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="orgName" className="text-xs text-white/60">
@@ -268,9 +321,7 @@ export default function OnboardingPage() {
                     className="border-white/10 bg-white/5 h-9"
                   />
                 </div>
-                {error && (
-                  <p className="text-xs text-red-400">{error}</p>
-                )}
+                {error && <p className="text-xs text-red-400">{error}</p>}
                 <Button
                   onClick={handleGenerateKey}
                   disabled={!orgName.trim() || isCreating}
@@ -285,7 +336,8 @@ export default function OnboardingPage() {
                   Generate API Key
                 </Button>
               </>
-            ) : (
+            ) : apiKey ? (
+              /* Just generated — show full key */
               <div className="space-y-3">
                 <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2">
                   <code className="flex-1 text-xs font-mono text-emerald-300 truncate">
@@ -318,6 +370,30 @@ export default function OnboardingPage() {
                   This key is shown only once. Store it somewhere safe.
                 </p>
               </div>
+            ) : (
+              /* Returning user — show existing key prefix */
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                  <Key className="size-3.5 text-emerald-400 shrink-0" />
+                  <code className="flex-1 text-xs font-mono text-emerald-300">
+                    {existingKeyPrefix}••••••••••••
+                  </code>
+                  <span className="text-[10px] text-emerald-400/70 font-medium">
+                    Active
+                  </span>
+                </div>
+                <p className="text-[11px] text-white/40">
+                  You already have an API key. Manage keys in{" "}
+                  <button
+                    type="button"
+                    onClick={() => router.push("/settings/api-keys")}
+                    className="text-blue-400 hover:underline"
+                  >
+                    Settings → API Keys
+                  </button>
+                  .
+                </p>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -326,7 +402,7 @@ export default function OnboardingPage() {
         <Card
           className={cn(
             "border-white/10 transition-opacity duration-300",
-            apiKey ? "opacity-100" : "opacity-40 pointer-events-none",
+            step1Complete ? "opacity-100" : "opacity-40 pointer-events-none",
           )}
           style={{ background: "hsl(222, 47%, 6%)" }}
         >
@@ -431,7 +507,7 @@ export default function OnboardingPage() {
         <Card
           className={cn(
             "border-white/10 transition-opacity duration-300",
-            apiKey ? "opacity-100" : "opacity-40 pointer-events-none",
+            step1Complete ? "opacity-100" : "opacity-40 pointer-events-none",
           )}
           style={{ background: "hsl(222, 47%, 6%)" }}
         >
@@ -507,7 +583,7 @@ export default function OnboardingPage() {
         </Card>
 
         {/* Continue to dashboard */}
-        {apiKey && (
+        {step1Complete && (
           <div className="flex justify-center pt-2 pb-8">
             <Button
               onClick={() => router.push("/dashboard")}
