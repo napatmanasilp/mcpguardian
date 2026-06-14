@@ -294,7 +294,7 @@ export const POST = async (request: NextRequest) => {
         .from("scans")
         .insert({
           organization_id: resolvedOrgId,
-          mcp_server_id: mcpServerId ?? "00000000-0000-0000-0000-000000000000",
+          mcp_server_id: mcpServerId || null,
           triggered_by: userId,
           trigger_reason: "manual",
           status: "completed",
