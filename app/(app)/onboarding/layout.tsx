@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Onboarding — MCPGuardian",
-  description: "Set up your organization and register your first MCP server.",
+  title: "Get Started — MCPGuardian",
+  description: "Set up your organization and secure your first MCP server.",
 };
 
 export default function OnboardingLayout({ children }: { children: React.ReactNode }) {

@@ -4,7 +4,8 @@
       "url": "https://mcpguardian-mcpguardian.vercel.app/api/proxy/4c57ca6b-3b4a-42dc-9920-49b2cd0f7e79",
       "headers": {
         "Authorization": "Bearer 57f04ec49ff4b875fa34b96b3aee9f4713ddae02816ddb2eb4cb25d969f7b850"
-      }
+      },
+      "disabled": false
     }
   }
 }

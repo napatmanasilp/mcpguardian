@@ -1,8 +1,20 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Globe, Loader2, Shield, Terminal } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Copy,
+  Eye,
+  EyeOff,
+  Key,
+  Loader2,
+  Plus,
+  Shield,
+  Terminal,
+} from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,531 +27,498 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { OnboardingSteps } from "@/components/onboarding/onboarding-steps";
 import { ShieldLogo } from "@/components/auth/shield-logo";
 import { createClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils";
 
-const PIPELINE_STEPS = [
-  "Static config analysis",
-  "Domain verification",
-  "Sandbox execution",
-  "Hash comparison",
-];
+// ── Code snippets per language ──────────────────────────────────────────
+const CODE_LANGUAGES = ["curl", "node.js", "python"] as const;
+type CodeLang = (typeof CODE_LANGUAGES)[number];
 
-const STATUS_MESSAGES = [
-  "Analyzing server configuration...",
-  "Verifying domain certificates...",
-  "Executing in isolated sandbox...",
-  "Matching against CVE database...",
-  "Checking OWASP MCP Top 10...",
-];
+function getCodeSnippet(lang: CodeLang, apiKey: string, proxyUrl: string): string {
+  const masked = apiKey ? apiKey : "mcpg_sk_••••••••••••••••••••••••••••••••";
+  switch (lang) {
+    case "curl":
+      return `curl -X POST ${proxyUrl} \\
+  -H "Authorization: Bearer ${masked}" \\
+  -H "Content-Type: application/json" \\
+  -d '{"method": "tools/list"}'`;
+    case "node.js":
+      return `const response = await fetch("${proxyUrl}", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer ${masked}",
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({ method: "tools/list" }),
+});
 
-function CountUp({ to, duration = 1200 }: { to: number; duration?: number }) {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    if (to === 0) { setCount(0); return; }
-    const start = Date.now();
-    let raf: number;
-    const tick = () => {
-      const elapsed = Date.now() - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3);
-      setCount(Math.round(eased * to));
-      if (progress < 1) raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [to, duration]);
-  return <>{count}</>;
+const data = await response.json();
+console.log(data);`;
+    case "python":
+      return `import requests
+
+response = requests.post(
+    "${proxyUrl}",
+    headers={
+        "Authorization": "Bearer ${masked}",
+        "Content-Type": "application/json",
+    },
+    json={"method": "tools/list"},
+)
+
+print(response.json())`;
+    default:
+      return "";
+  }
+}
+
+// ── MCP client config snippet ───────────────────────────────────────────
+function getMcpClientConfig(apiKey: string, proxyUrl: string): string {
+  const masked = apiKey ? apiKey : "mcpg_sk_••••••••••••••••••••••••••••••••";
+  return JSON.stringify(
+    {
+      mcpServers: {
+        "my-server": {
+          url: proxyUrl,
+          headers: { Authorization: `Bearer ${masked}` },
+        },
+      },
+    },
+    null,
+    2,
+  );
 }
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [step, setStep] = useState<"form" | "scanning" | "complete">("form");
   const [orgName, setOrgName] = useState("");
-  const [serverName, setServerName] = useState("");
-  const [transportType, setTransportType] = useState<"http" | "stdio">("http");
-  const [endpointUrl, setEndpointUrl] = useState("");
-  const [stdioCommand, setStdioCommand] = useState("");
   const [isCreating, setIsCreating] = useState(false);
-  const [scanId, setScanId] = useState<string | null>(null);
-  const [completedSteps, setCompletedSteps] = useState<string[]>([]);
-  const [scanError, setScanError] = useState<string | null>(null);
-  const [scanResult, setScanResult] = useState<{
-    status?: string;
-    risk_score?: number;
-    overall_result?: string;
-    cveCount?: number;
-  }>({});
-  const [scanProgress, setScanProgress] = useState(0);
-  const [statusMsgIndex, setStatusMsgIndex] = useState(0);
-  const [stepTimings, setStepTimings] = useState<Record<string, number>>({});
-  const stepStartRef = useRef<Record<string, number>>({});
-  const [showProtected, setShowProtected] = useState(false);
-  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState<string | null>(null);
+  const [showKey, setShowKey] = useState(true);
+  const [keyCopied, setKeyCopied] = useState(false);
+  const [configCopied, setConfigCopied] = useState(false);
+  const [selectedLang, setSelectedLang] = useState<CodeLang>("curl");
+  const [codeCopied, setCodeCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = orgName.trim() && serverName.trim() && (transportType === "http" ? endpointUrl.trim() : stdioCommand.trim());
+  const siteOrigin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "http://localhost:3000";
+  const proxyUrl = `${siteOrigin}/api/proxy`;
 
-  // Pre-fill org name from email
+  // Derive org name from email on mount
   useEffect(() => {
-    const fetchEmail = async () => {
+    const prefill = async () => {
       const stored = sessionStorage.getItem("signup-email");
       if (stored) {
-        setUserEmail(stored);
         const domain = stored.split("@")[1] ?? "";
         const name = domain.split(".")[0] ?? "";
-        const derived = name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, " ");
-        if (derived && !orgName) {
-          setOrgName(derived);
-        }
+        const derived =
+          name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, " ");
+        if (derived) setOrgName(derived);
         return;
       }
       try {
         const supabase = createClient();
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
         if (user?.email) {
-          setUserEmail(user.email);
           const domain = user.email.split("@")[1] ?? "";
           const name = domain.split(".")[0] ?? "";
-          const derived = name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, " ");
+          const derived =
+            name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, " ");
           if (derived) setOrgName(derived);
         }
       } catch {
-        // Silently fail — user can type org name manually
+        // Silent — user can type manually
       }
     };
-    fetchEmail();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    prefill();
+  }, []);
 
-  useEffect(() => {
-    if (step === "scanning") {
-      const interval = setInterval(() => {
-        setStatusMsgIndex((prev) => (prev + 1) % STATUS_MESSAGES.length);
-      }, 2500);
-      return () => clearInterval(interval);
-    }
-  }, [step]);
-
-  useEffect(() => {
-    if (step === "complete") {
-      const timer = setTimeout(() => setShowProtected(true), 800);
-      return () => clearTimeout(timer);
-    }
-  }, [step]);
-
-  const handleCreate = useCallback(async () => {
-    if (!canSubmit) return;
+  // ── Generate API Key ──────────────────────────────────────────────
+  const handleGenerateKey = useCallback(async () => {
+    if (!orgName.trim()) return;
     setIsCreating(true);
-    setScanError(null);
-    setStep("scanning");
-    setScanProgress(0);
+    setError(null);
 
     try {
-      const res = await fetch("/api/onboarding", {
+      // Step 1: Create org via onboarding endpoint (reuse existing logic)
+      const onboardRes = await fetch("/api/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          orgName,
-          serverName,
-          transportType,
-          endpointUrl: transportType === "http" ? endpointUrl : undefined,
-          stdioCommand: transportType === "stdio" ? stdioCommand : undefined,
+          orgName: orgName.trim(),
+          serverName: "default",
+          transportType: "http",
+          endpointUrl: "https://placeholder.mcpguardian.com",
         }),
       });
 
-      const responseData = await res.json();
-
-      if (!res.ok) {
-        throw new Error(responseData?.error?.message ?? "Failed to create organization");
+      if (!onboardRes.ok) {
+        const data = await onboardRes.json();
+        // If org already exists, that's fine — continue to key generation
+        if (!data?.error?.message?.includes("already")) {
+          throw new Error(data?.error?.message ?? "Failed to set up organization");
+        }
       }
 
-      const { scanId: newScanId } = responseData.data ?? {};
-
-      if (!newScanId) {
-        setStep("complete");
-        setScanProgress(100);
-        return;
-      }
-
-      setScanId(newScanId);
-
-      // Record step start times
-      PIPELINE_STEPS.forEach((name) => {
-        stepStartRef.current[name] = Date.now();
+      // Step 2: Generate API key
+      const keyRes = await fetch("/api/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Onboarding Key" }),
       });
 
-      const pollInterval = setInterval(async () => {
-        try {
-          const scanRes = await fetch(`/api/scans/${newScanId}`);
-          if (!scanRes.ok) return;
-          const data = await scanRes.json();
-          const scan = data.data;
+      const keyData = await keyRes.json();
 
-          if (scan?.status === "completed" || scan?.status === "failed") {
-            clearInterval(pollInterval);
-            const steps = (scan.pipeline_steps ?? []) as Array<{ step_name: string; status: string; completed_at?: string }>;
-            setCompletedSteps(steps.map((s) => s.step_name));
-            setScanProgress(100);
-            setScanResult({
-              status: scan.status,
-              risk_score: scan.risk_score,
-              overall_result: scan.overall_result,
-              cveCount: scan.cve_count ?? 0,
-            });
-            setStep("complete");
-          } else if (scan?.pipeline_steps) {
-            const activeSteps = (scan.pipeline_steps as Array<{ step_name: string; status: string; completed_at?: string }>)
-              .filter((s) => s.status === "PASS" || s.status === "FAIL")
-              .map((s) => s.step_name);
-            setCompletedSteps(activeSteps);
+      if (!keyRes.ok) {
+        throw new Error(keyData?.error ?? "Failed to generate API key");
+      }
 
-            // Record timings for completed steps
-            activeSteps.forEach((name) => {
-              if (!stepTimings[name] && stepStartRef.current[name]) {
-                setStepTimings((prev) => ({
-                  ...prev,
-                  [name]: (Date.now() - stepStartRef.current[name]) / 1000,
-                }));
-              }
-            });
-
-            setScanProgress(Math.round((activeSteps.length / PIPELINE_STEPS.length) * 100));
-          }
-        } catch {
-          // poll continues
-        }
-      }, 2000);
-
-      setTimeout(() => clearInterval(pollInterval), 60000);
+      setApiKey(keyData.key);
+      toast.success("API key generated");
     } catch (err) {
-      setScanError(err instanceof Error ? err.message : "An error occurred");
-      setStep("form");
+      setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setIsCreating(false);
     }
-  }, [canSubmit, orgName, serverName, transportType, endpointUrl, stdioCommand]);
+  }, [orgName]);
 
-  const getRiskBadgeClass = (score: number | undefined) => {
-    if (score == null) return "";
-    if (score >= 80) return "bg-emerald-500/20 text-emerald-400 border-emerald-500/30";
-    if (score >= 60) return "bg-amber-500/20 text-amber-400 border-amber-500/30";
-    return "bg-red-500/20 text-red-400 border-red-500/30";
-  };
+  // ── Copy handlers ─────────────────────────────────────────────────
+  const handleCopyKey = useCallback(() => {
+    if (!apiKey) return;
+    navigator.clipboard.writeText(apiKey);
+    setKeyCopied(true);
+    toast.success("API key copied");
+    setTimeout(() => setKeyCopied(false), 2000);
+  }, [apiKey]);
 
-  const getRiskLabel = (score: number | undefined) => {
-    if (score == null) return "Unknown";
-    if (score >= 80) return "Low Risk";
-    if (score >= 60) return "Medium Risk";
-    return "High Risk";
-  };
+  const handleCopyCode = useCallback(() => {
+    const code = getCodeSnippet(selectedLang, apiKey ?? "", proxyUrl);
+    navigator.clipboard.writeText(code);
+    setCodeCopied(true);
+    toast.success("Code copied");
+    setTimeout(() => setCodeCopied(false), 2000);
+  }, [apiKey, selectedLang, proxyUrl]);
 
-  // ── Scanning / Complete View ─────────────────────────────────────
-  if (step === "scanning" || step === "complete") {
-    return (
-      <div className="flex min-h-screen items-center justify-center p-6">
-        <Card className="w-full max-w-lg border-white/10 bg-bg-base">
-          <CardHeader className="text-center">
-            <OnboardingSteps currentStep={1} />
-            <div className="mx-auto mb-4">
-              <ShieldLogo className="size-12" />
+  const handleCopyConfig = useCallback(() => {
+    const config = getMcpClientConfig(apiKey ?? "", proxyUrl);
+    navigator.clipboard.writeText(config);
+    setConfigCopied(true);
+    toast.success("Config copied");
+    setTimeout(() => setConfigCopied(false), 2000);
+  }, [apiKey, proxyUrl]);
+
+  // ── Render ────────────────────────────────────────────────────────
+  return (
+    <div className="flex min-h-screen items-center justify-center p-6">
+      <div className="w-full max-w-2xl space-y-6">
+        {/* Header */}
+        <div className="text-center space-y-3">
+          <div className="mx-auto mb-2">
+            <ShieldLogo className="size-10" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-white">
+            Secure your first MCP server
+          </h1>
+          <p className="text-sm text-white/50 max-w-md mx-auto">
+            Follow the steps to connect your MCP server through MCPGuardian for
+            runtime protection.
+          </p>
+        </div>
+
+        {/* Step 1: Generate API Key */}
+        <Card className="border-white/10 bg-[hsl(222,47%,6%)]">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  "flex size-7 items-center justify-center rounded-full text-xs font-bold",
+                  apiKey
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-blue-500/20 text-blue-400",
+                )}
+              >
+                {apiKey ? <Check className="size-3.5" /> : "1"}
+              </div>
+              <CardTitle className="text-base">Add an API key</CardTitle>
             </div>
-            <CardTitle className="text-xl">
-              {step === "scanning" ? "Scanning your MCP server..." : "Scan complete"}
-            </CardTitle>
-            <CardDescription>
-              {step === "scanning"
-                ? "Our pipeline is analyzing the server configuration. This takes a few seconds."
-                : `Risk score: ${scanResult.risk_score ?? "—"}/100 · ${scanResult.overall_result ?? "unknown"}`}
+            <CardDescription className="ml-10 text-xs">
+              Use the generated key to authenticate requests to your protected
+              MCP servers.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {PIPELINE_STEPS.map((name) => {
-              const done = completedSteps.includes(name);
-              const isActive = step === "scanning" && !done && completedSteps.length >= PIPELINE_STEPS.indexOf(name);
-              const timing = stepTimings[name];
-              return (
-                <div key={name} className="flex items-center gap-3 text-sm">
-                  {done ? (
-                    <span className="inline-flex animate-in zoom-in-0 duration-300 ease-out">
-                      <div className="flex size-6 items-center justify-center rounded-full bg-emerald-500/20">
-                        <Check className="size-3.5 text-emerald-400" />
-                      </div>
-                    </span>
-                  ) : isActive ? (
-                    <Loader2 className="size-5 animate-spin text-blue-400" />
-                  ) : (
-                    <div className="size-6 rounded-full border-2 border-white/20" />
-                  )}
-                  <span className={done ? "text-slate-200" : "text-slate-500"}>{name}</span>
-                  {timing != null && (
-                    <span className="font-mono text-xs text-white/40 ml-auto">{timing.toFixed(1)}s</span>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Progress bar during scan */}
-            {step === "scanning" && (
+          <CardContent className="ml-10 space-y-4">
+            {!apiKey ? (
               <>
-                <Progress value={scanProgress} className="h-1 mt-2" />
-                {/* Rotating status messages */}
-                <p className="text-sm text-white/50 font-mono animate-pulse text-center mt-3">
-                  {STATUS_MESSAGES[statusMsgIndex]}
-                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="orgName" className="text-xs text-white/60">
+                    Organization name
+                  </Label>
+                  <Input
+                    id="orgName"
+                    placeholder="Your company or project name"
+                    value={orgName}
+                    onChange={(e) => setOrgName(e.target.value)}
+                    className="border-white/10 bg-white/5 h-9"
+                  />
+                </div>
+                {error && (
+                  <p className="text-xs text-red-400">{error}</p>
+                )}
+                <Button
+                  onClick={handleGenerateKey}
+                  disabled={!orgName.trim() || isCreating}
+                  className="gap-2"
+                  size="sm"
+                >
+                  {isCreating ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <Key className="size-3.5" />
+                  )}
+                  Generate API Key
+                </Button>
               </>
-            )}
-
-            {scanError && (
-              <p className="text-sm text-red-400 text-center">{scanError}</p>
-            )}
-
-            {/* Result reveal */}
-            {step === "complete" && scanResult.risk_score != null && (
-              <div className="text-center space-y-4 pt-2">
-                <Separator className="bg-white/10" />
-                <p className="text-sm text-white/50 uppercase tracking-widest">Risk Score</p>
-                <div className="font-mono text-7xl font-bold text-white tabular-nums">
-                  <CountUp to={scanResult.risk_score} duration={1200} />
-                  <span className="text-3xl text-white/40">/100</span>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-black/40 px-3 py-2">
+                  <code className="flex-1 text-xs font-mono text-emerald-300 truncate">
+                    {showKey ? apiKey : "mcpg_sk_" + "•".repeat(40)}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                  >
+                    {showKey ? (
+                      <EyeOff className="size-3.5" />
+                    ) : (
+                      <Eye className="size-3.5" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCopyKey}
+                    className="p-1 text-white/40 hover:text-white/70 transition-colors"
+                  >
+                    {keyCopied ? (
+                      <Check className="size-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="size-3.5" />
+                    )}
+                  </button>
                 </div>
-                <Badge className={cn(getRiskBadgeClass(scanResult.risk_score), "px-3 py-1")}>
-                  {getRiskLabel(scanResult.risk_score)}
-                </Badge>
-
-                {/* Summary row */}
-                <div className="grid grid-cols-4 gap-3 mt-6 pt-6 border-t border-white/10">
-                  <div className="text-center">
-                    <p className="text-xs text-white/40 mb-1">OWASP</p>
-                    <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">
-                      Pass
-                    </Badge>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-white/40 mb-1">CVE</p>
-                    <Badge variant="outline" className={cn(scanResult.cveCount === 0 ? "text-emerald-400 border-emerald-500/30" : "text-amber-400 border-amber-500/30")}>
-                      {scanResult.cveCount === 0 ? "None Found" : scanResult.cveCount}
-                    </Badge>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-white/40 mb-1">Domain</p>
-                    <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">
-                      Verified ✓
-                    </Badge>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-xs text-white/40 mb-1">Sandbox</p>
-                    <Badge variant="outline" className="text-emerald-400 border-emerald-500/30">
-                      Clean ✓
-                    </Badge>
-                  </div>
-                </div>
+                <p className="text-[11px] text-white/40">
+                  This key is shown only once. Store it somewhere safe.
+                </p>
               </div>
             )}
+          </CardContent>
+        </Card>
 
-            {/* Animated proxy diagram */}
-            {step === "complete" && (
-              <div className="relative h-20 mt-4">
-                {/* UNPROTECTED state */}
-                <div
-                  className={cn(
-                    "absolute inset-0 flex items-center justify-center transition-opacity duration-700",
-                    showProtected ? "opacity-0" : "opacity-100",
-                  )}
-                >
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-1.5">Agent</span>
-                    <span className="text-red-500/50">→</span>
-                    <span className="rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-1.5">MCP Server</span>
-                  </div>
-                </div>
-                {/* PROTECTED state */}
-                <div
-                  className={cn(
-                    "absolute inset-0 flex items-center justify-center transition-opacity duration-700",
-                    showProtected ? "opacity-100" : "opacity-0",
-                  )}
-                >
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-blue-300">Agent</span>
-                    <span className="text-blue-400">→</span>
-                    <span className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-emerald-300 font-semibold">🛡 MCPGuardian</span>
-                    <span className="text-blue-400">→</span>
-                    <span className="rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-1.5 text-blue-300">MCP Server</span>
-                  </div>
-                </div>
+        {/* Step 2: Connect MCP Server */}
+        <Card
+          className={cn(
+            "border-white/10 transition-opacity duration-300",
+            apiKey ? "opacity-100" : "opacity-40 pointer-events-none",
+          )}
+          style={{ background: "hsl(222, 47%, 6%)" }}
+        >
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-7 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-400">
+                2
               </div>
-            )}
+              <CardTitle className="text-base">
+                Connect your MCP server
+              </CardTitle>
+            </div>
+            <CardDescription className="ml-10 text-xs">
+              Add this config to your MCP client (Claude Desktop, Cursor, etc.)
+              or make an API call to verify the connection.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="ml-10 space-y-4">
+            {/* MCP Client Config */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-white/70">
+                  MCP client config
+                </p>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] text-white/50 hover:text-white"
+                  onClick={handleCopyConfig}
+                >
+                  {configCopied ? (
+                    <>
+                      <Check className="size-3 mr-1" /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-3 mr-1" /> Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/50 p-3">
+                <pre className="font-mono text-[11px] leading-relaxed text-white/80 overflow-x-auto">
+                  {getMcpClientConfig(apiKey ?? "", proxyUrl)}
+                </pre>
+              </div>
+            </div>
 
             <Separator className="bg-white/5" />
 
-            <div className="flex gap-3">
-              {step === "scanning" ? (
+            {/* Code snippet */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-white/70">
+                  Or verify with a test request
+                </p>
                 <Button
-                  variant="outline"
-                  className="flex-1 border-white/10"
-                  disabled
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-[10px] text-white/50 hover:text-white"
+                  onClick={handleCopyCode}
                 >
-                  Scanning...
+                  {codeCopied ? (
+                    <>
+                      <Check className="size-3 mr-1" /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-3 mr-1" /> Copy
+                    </>
+                  )}
                 </Button>
-              ) : (
-                <Button
-                  variant="outline"
-                  className="flex-1 border-white/10"
-                  onClick={() => router.push("/onboarding/proxy-setup")}
-                >
-                  Continue to proxy setup
-                </Button>
-              )}
+              </div>
+              {/* Language tabs */}
+              <div className="flex gap-1 border-b border-white/5 pb-1">
+                {CODE_LANGUAGES.map((lang) => (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => setSelectedLang(lang)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors",
+                      selectedLang === lang
+                        ? "bg-white/10 text-white"
+                        : "text-white/40 hover:text-white/70",
+                    )}
+                  >
+                    {lang}
+                  </button>
+                ))}
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/50 p-3">
+                <pre className="font-mono text-[11px] leading-relaxed text-white/80 overflow-x-auto whitespace-pre-wrap">
+                  {getCodeSnippet(selectedLang, apiKey ?? "", proxyUrl)}
+                </pre>
+              </div>
             </div>
           </CardContent>
         </Card>
+
+        {/* Step 3: Explore more */}
+        <Card
+          className={cn(
+            "border-white/10 transition-opacity duration-300",
+            apiKey ? "opacity-100" : "opacity-40 pointer-events-none",
+          )}
+          style={{ background: "hsl(222, 47%, 6%)" }}
+        >
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-3">
+              <div className="flex size-7 items-center justify-center rounded-full bg-blue-500/20 text-xs font-bold text-blue-400">
+                3
+              </div>
+              <CardTitle className="text-base">Explore more</CardTitle>
+            </div>
+            <CardDescription className="ml-10 text-xs">
+              Continue unlocking MCPGuardian&apos;s full capabilities.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="ml-10 space-y-2">
+            <button
+              type="button"
+              onClick={() => router.push("/servers/new")}
+              className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition-colors group text-left"
+            >
+              <div className="flex size-8 items-center justify-center rounded-full bg-blue-500/15">
+                <Plus className="size-4 text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white/80">
+                  Add an MCP server
+                </p>
+                <p className="text-xs text-white/40">
+                  Register and scan servers for vulnerabilities.
+                </p>
+              </div>
+              <ChevronRight className="size-4 text-white/30 group-hover:text-white/60 transition-colors" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/sessions")}
+              className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition-colors group text-left"
+            >
+              <div className="flex size-8 items-center justify-center rounded-full bg-emerald-500/15">
+                <Shield className="size-4 text-emerald-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white/80">
+                  View proxy sessions
+                </p>
+                <p className="text-xs text-white/40">
+                  Monitor runtime tool calls in real time.
+                </p>
+              </div>
+              <ChevronRight className="size-4 text-white/30 group-hover:text-white/60 transition-colors" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/settings/team")}
+              className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition-colors group text-left"
+            >
+              <div className="flex size-8 items-center justify-center rounded-full bg-purple-500/15">
+                <Terminal className="size-4 text-purple-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-white/80">
+                  Invite your team
+                </p>
+                <p className="text-xs text-white/40">
+                  Collaborate on MCP server security.
+                </p>
+              </div>
+              <ChevronRight className="size-4 text-white/30 group-hover:text-white/60 transition-colors" />
+            </button>
+          </CardContent>
+        </Card>
+
+        {/* Continue to dashboard */}
+        {apiKey && (
+          <div className="flex justify-center pt-2 pb-8">
+            <Button
+              onClick={() => router.push("/dashboard")}
+              className="gap-2"
+            >
+              Continue to Dashboard
+              <ChevronRight className="size-4" />
+            </Button>
+          </div>
+        )}
       </div>
-    );
-  }
-
-  // ── Form View ─────────────────────────────────────────────────────
-  return (
-    <div className="flex min-h-screen items-center justify-center p-6">
-      <Card className="w-full max-w-lg border-white/10 bg-bg-base">          <CardHeader className="text-center">
-          <OnboardingSteps currentStep={0} />
-          <div className="mx-auto mb-4">
-            <ShieldLogo className="size-12" />
-          </div>
-          <CardTitle className="text-xl">Set up your organization</CardTitle>
-          <CardDescription>
-            Create your organization and register your first MCP server.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
-          {/* Transport selector — card toggles */}
-          <div className="space-y-2">
-            <Label>Transport type</Label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setTransportType("http")}
-                className={cn(
-                  "flex flex-col gap-2 p-4 rounded-lg border-2 text-left transition-all duration-150",
-                  transportType === "http"
-                    ? "border-blue-500 bg-blue-500/10"
-                    : "border-white/10 bg-white/5 hover:border-white/20",
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <Globe className="size-4 text-blue-400" />
-                  <span className="font-medium text-sm text-slate-200">HTTP</span>
-                  <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[9px] ml-auto">
-                    Recommended
-                  </Badge>
-                </div>
-                <p className="text-xs text-white/50">Full coverage · All scan modules</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setTransportType("stdio")}
-                className={cn(
-                  "flex flex-col gap-2 p-4 rounded-lg border-2 text-left transition-all duration-150",
-                  transportType === "stdio"
-                    ? "border-amber-500 bg-amber-500/10"
-                    : "border-white/10 bg-white/5 hover:border-white/20",
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  <Terminal className="size-4 text-amber-400" />
-                  <span className="font-medium text-sm text-slate-200">STDIO</span>
-                  <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[9px] ml-auto">
-                    ⚠ Limited
-                  </Badge>
-                </div>
-                <p className="text-xs text-white/50">Local only · Reduced scan scope</p>
-              </button>
-            </div>
-          </div>
-
-          {/* STDIO warning */}
-          {transportType === "stdio" && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 p-4 text-sm">
-              <p className="font-semibold text-amber-300 mb-1">⚠ STDIO Runtime Protection — Limited Coverage</p>
-              <p className="text-slate-400 text-xs">
-                STDIO-based servers (Claude Code, Cursor) do not currently support full runtime proxy protection.
-                Pre-connect scanning is active. Runtime interception is on our roadmap for Q3 2026.
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <Label htmlFor="orgName">Organization name</Label>             <Input
-              id="orgName"
-              placeholder="Your organization name"
-              value={orgName}
-              onChange={(e) => setOrgName(e.target.value)}
-              className="border-white/10 bg-white/5"
-            />
-             {userEmail && (
-               <p className="text-xs text-white/40 mt-1">
-                 Derived from your email — feel free to change this
-               </p>
-             )}
-          </div>
-
-          <Separator className="bg-white/5" />
-
-          <div className="space-y-2">
-            <Label htmlFor="serverName">MCP server name</Label>
-            <Input
-              id="serverName"
-              placeholder="production-db"
-              value={serverName}
-              onChange={(e) => setServerName(e.target.value)}
-              className="border-white/10 bg-white/5"
-            />
-          </div>
-
-          {transportType === "http" ? (
-            <div className="space-y-2">
-              <Label htmlFor="url">Endpoint URL</Label>
-              <Input
-                id="url"
-                placeholder="https://mcp.example.com"
-                value={endpointUrl}
-                onChange={(e) => setEndpointUrl(e.target.value)}
-                className="border-white/10 bg-white/5"
-              />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Label htmlFor="command">STDIO command</Label>
-              <Input
-                id="command"
-                placeholder="npx -y @modelcontextprotocol/server-filesystem"
-                value={stdioCommand}
-                onChange={(e) => setStdioCommand(e.target.value)}
-                className="border-white/10 bg-white/5"
-              />
-            </div>
-          )}
-
-          {scanError && (
-            <p className="text-sm text-red-400 text-center">{scanError}</p>
-          )}
-
-          <Button
-            className="w-full gap-2"
-            disabled={!canSubmit || isCreating}
-            onClick={handleCreate}
-          >
-            {isCreating ? (
-              <Loader2 className="size-4 animate-spin" />
-            ) : (
-              <Shield className="size-4" />
-            )}
-            Register & Scan Server
-          </Button>
-        </CardContent>
-      </Card>
     </div>
   );
 }
