@@ -34,7 +34,9 @@ export async function getOrgContext(): Promise<OrgContext | null> {
     .select("organization_id, role")
     .eq("user_id", user.id)
     .eq("invitation_status", "accepted")
-    .single();
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   if (!membership) return null;
 

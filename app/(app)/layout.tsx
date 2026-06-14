@@ -48,7 +48,9 @@ const AppLayout = async ({ children }: { children: React.ReactNode }) => {
     .select("organization_id")
     .eq("user_id", user.id)
     .eq("invitation_status", "accepted")
-    .single();
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   let plan = "free";
   let scansThisMonth = 0;
