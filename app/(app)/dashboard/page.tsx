@@ -89,7 +89,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     svc
       .from("organizations")
-      .select("name, plan_id, scans_used_this_period, tool_calls_used_this_period, proxy_first_connected_at, current_period_start, current_period_end, scan_limit, tool_call_limit")
+      .select("name, plan_id, scans_used_this_period, tool_calls_used_this_period, proxy_first_connected_at, current_period_start, current_period_end")
       .eq("id", orgId)
       .single(),
     svc
