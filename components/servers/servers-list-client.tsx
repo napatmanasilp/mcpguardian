@@ -200,8 +200,8 @@ export function ServersListClient({
                     {server.risk_score != null && (
                       <div className="mt-3 h-1 w-full overflow-hidden rounded-full bg-white/5">
                         <div
-                          className={cn("h-full rounded-full transition-all duration-500", server.risk_score >= 80 ? "bg-secure" : server.risk_score >= 60 ? "bg-caution" : "bg-threat")}
-                          style={{ width: `${server.risk_score}%` }}
+                          className={cn("h-full rounded-full transition-all duration-500", server.risk_score <= 20 ? "bg-secure" : server.risk_score <= 50 ? "bg-caution" : "bg-threat")}
+                          style={{ width: `${100 - server.risk_score}%` }}
                         />
                       </div>
                     )}

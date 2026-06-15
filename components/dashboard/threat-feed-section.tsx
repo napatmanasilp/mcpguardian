@@ -78,11 +78,11 @@ export function ThreatFeedSection({ threats }: { threats: ScanThreat[] }) {
               <div className="flex items-center gap-2 min-w-0">
                 <span className={cn(
                   "font-mono text-xs font-bold",
-                  scan.risk_score && scan.risk_score > 60 ? "text-red-400" :
-                  scan.risk_score && scan.risk_score > 30 ? "text-amber-400" :
+                  (scan.risk_score ?? 0) > 50 ? "text-red-400" :
+                  (scan.risk_score ?? 0) > 20 ? "text-amber-400" :
                   "text-emerald-400"
                 )}>
-                  {scan.risk_score ?? 0}
+                  {Math.max(0, 100 - (scan.risk_score ?? 0))}
                 </span>
                 <Badge
                   variant={scan.overall_result === "malicious" ? "destructive" : "secondary"}

@@ -165,26 +165,26 @@ const ServerDetailPage = async ({
       {/* Risk Score Banner */}
       <Card className={cn(
         "border-white/10",
-        server.risk_score != null && server.risk_score > 60 ? "bg-threat/5 border-threat/20" :
-        server.risk_score != null && server.risk_score > 30 ? "bg-caution/5 border-caution/20" :
+        server.risk_score != null && server.risk_score > 50 ? "bg-threat/5 border-threat/20" :
+        server.risk_score != null && server.risk_score > 20 ? "bg-caution/5 border-caution/20" :
         "bg-secure/5 border-secure/20"
       )}>
         <CardContent className="p-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Shield className={cn(
               "size-8",
-              server.risk_score != null && server.risk_score > 60 ? "text-threat" :
-              server.risk_score != null && server.risk_score > 30 ? "text-caution" :
+              server.risk_score != null && server.risk_score > 50 ? "text-threat" :
+              server.risk_score != null && server.risk_score > 20 ? "text-caution" :
               "text-secure"
             )} />
             <div>
               <p className="text-sm font-semibold text-slate-200">
-                Risk Score: <span className={cn(
+                Safety Score: <span className={cn(
                   "font-mono",
-                  server.risk_score != null && server.risk_score > 60 ? "text-threat" :
-                  server.risk_score != null && server.risk_score > 30 ? "text-caution" :
+                  server.risk_score != null && server.risk_score > 50 ? "text-threat" :
+                  server.risk_score != null && server.risk_score > 20 ? "text-caution" :
                   "text-secure"
-                )}>{server.risk_score ?? "—"}</span>/100
+                )}>{server.risk_score != null ? Math.max(0, 100 - server.risk_score) : "—"}</span>/100
               </p>
               <p className="text-xs text-slate-500">
                 {server.last_scan_result === "clean" && "No threats detected"}
@@ -300,11 +300,11 @@ const ServerDetailPage = async ({
                     <div className="flex items-center gap-3">
                       <span className={cn(
                         "font-mono text-sm font-bold",
-                        (scan.risk_score ?? 0) <= 30 ? "text-emerald-400" :
-                        (scan.risk_score ?? 0) <= 60 ? "text-amber-400" :
+                        (scan.risk_score ?? 0) <= 20 ? "text-emerald-400" :
+                        (scan.risk_score ?? 0) <= 50 ? "text-amber-400" :
                         "text-red-400"
                       )}>
-                        {scan.risk_score ?? "—"}
+                        {Math.max(0, 100 - (scan.risk_score ?? 0))}
                       </span>
                       <span className="text-xs text-slate-400 capitalize">{scan.overall_result ?? scan.status}</span>
                     </div>
