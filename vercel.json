@@ -1,4 +1,15 @@
 {
+  "functions": {
+    "app/api/servers/*/rescan/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/scan/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/cron/*/route.ts": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/cron/monitor",

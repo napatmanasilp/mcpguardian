@@ -30,9 +30,10 @@ export function RescanButton({ serverId, onSuccess }: RescanButtonProps) {
       }
 
       const data = await res.json();
+      toast.success("Scan complete");
       onSuccess?.({
         lastScanAt: new Date().toISOString(),
-        riskScore: data.riskScore ?? 0,
+        riskScore: data.data?.riskScore ?? 0,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Rescan failed";
@@ -56,7 +57,7 @@ export function RescanButton({ serverId, onSuccess }: RescanButtonProps) {
       ) : (
         <RotateCw className="size-3.5" />
       )}
-      Rescan
+      {scanning ? "Scanning..." : "Rescan"}
     </Button>
   );
 }
