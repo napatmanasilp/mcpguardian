@@ -210,13 +210,14 @@ export async function verifyDomain(url: string): Promise<{ domainCheck: DomainCh
         }
 
         if (!chainResult.valid && chainResult.failureReason === 'UNTRUSTED_ROOT') {
-          criticalBlocked = true;
+          // Note: Many legitimate CAs (Google Trust Services, Amazon) may not be in
+          // the bundled Mozilla CA list. Don't block — just inform.
           issues.push({
             type: 'UNTRUSTED_ROOT_CA',
-            severity: 'CRITICAL',
-            title: 'Certificate signed by untrusted root CA',
-            description: `Server "${hostname}" uses a certificate whose root CA "${chainResult.rootCA}" is not in the Mozilla CA root store. This means the certificate cannot be trusted by standard clients.`,
-            fix: 'Replace the certificate with one issued by a publicly trusted Certificate Authority (Let\'s Encrypt, DigiCert, Sectigo, etc.).',
+            severity: 'LOW',
+            title: 'Certificate root CA not in bundled trust store',
+            description: `Server "${hostname}" uses root CA "${chainResult.rootCA}" which is not in the scanner's bundled CA list. This is common for Google Cloud, AWS, and other major providers that use their own root CAs.`,
+            fix: 'No action needed if using a major cloud provider. The CA is likely trusted by browsers and operating systems.',
             deduction: 0,
           });
         }
@@ -415,11 +416,11 @@ export async function verifyDomain(url: string): Promise<{ domainCheck: DomainCh
     if (!dnsConsistent) {
       issues.push({
         type: 'DNS_INCONSISTENT',
-        severity: 'HIGH',
-        title: 'Domain resolves inconsistently across DNS servers',
-        description: `Domain "${hostname}" resolves to different IPs on different DNS servers: ${dnsResults.join(', ')}. Possible DNS hijacking.`,
-        fix: 'Check DNS configuration for inconsistencies. Ensure all nameservers return the same records.',
-        deduction: 15,
+        severity: 'MEDIUM',
+        title: 'Domain resolves to different IP sets across DNS providers',
+        description: `Domain "${hostname}" resolves to different IPs on different DNS servers: ${dnsResults.join(', ')}. This is common for CDN-backed services (Cloudflare, AWS) but could indicate DNS manipulation for other domains.`,
+        fix: 'If this is a CDN-backed service, this is expected behavior. Otherwise, check DNS configuration for inconsistencies.',
+        deduction: 5,
       });
     }
   } catch {
@@ -1452,13 +1453,15 @@ async function checkDnsConsistency(
     return ips.length > 0 ? `${label}: ${ips.join(',')}` : `${label}: (unreachable)`;
   });
 
-  // Check if all resolvers that succeeded returned the same IPs
+  // Check if all resolvers that succeeded returned the same set of IPs (order-independent)
   const successfulResults = results.filter(ips => ips.length > 0);
   const consistent = successfulResults.length <= 1 ||
-    successfulResults.every(ips =>
-      ips.length === successfulResults[0].length &&
-      ips.every((ip, j) => ip === successfulResults[0][j]),
-    );
+    successfulResults.every(ips => {
+      const sorted = [...ips].sort();
+      const firstSorted = [...successfulResults[0]].sort();
+      return sorted.length === firstSorted.length &&
+        sorted.every((ip, j) => ip === firstSorted[j]);
+    });
 
   return { consistent, results: flatResults };
 }
