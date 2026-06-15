@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AlertTriangle, ArrowRight, Download, ExternalLink } from "lucide-react";
+import { AlertTriangle, ArrowRight, ExternalLink } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "Billing — MCPGuardian",
@@ -17,9 +17,7 @@ import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
 import { shouldShowWarning, formatAllowanceDisplay } from "@/lib/quota-enforcer";
 import { TIER_CATALOG, getTier } from "@/lib/tier-catalog";
-import type { Invoice } from "@/lib/types/invoice";
 import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/utils/invoice";
 
 const BillingSettingsPage = async () => {
   const orgContext = await getOrgContext();
@@ -42,10 +40,11 @@ const BillingSettingsPage = async () => {
     .eq("status", "active");
 
   const { data: invoices } = await svc
-    .from("invoices")
-    .select("id, created_at, amount_paid, currency, status, hosted_invoice_url")
+    .from("usage_billing_records")
+    .select("id, created_at, total_charge_cents, status")
     .eq("organization_id", orgContext.organizationId)
-    .order("created_at", { ascending: false }) as { data: Invoice[] | null };
+    .order("created_at", { ascending: false })
+    .limit(10);
 
   const tier = getTier(org.plan_id ?? "free") ?? TIER_CATALOG.free;
   const scanAllowance = tier.scanAllowance;
@@ -231,50 +230,36 @@ const BillingSettingsPage = async () => {
         <CardContent>
           {invoices && invoices.length > 0 ? (
             <div className="space-y-2">
-              {invoices.map((invoice) => (
+              {invoices.map((record) => (
                 <div
-                  key={invoice.id}
+                  key={record.id}
                   className="flex items-center justify-between rounded-md bg-white/5 px-3 py-2 text-sm"
                 >
                   <span className="text-slate-300">
-                    {new Date(invoice.created_at).toLocaleDateString(undefined, {
+                    {new Date(record.created_at).toLocaleDateString(undefined, {
                       month: "short",
                       day: "numeric",
                       year: "numeric",
                     })}
                   </span>
                   <span className="text-slate-200 font-mono">
-                    {formatCurrency(invoice.amount_paid, invoice.currency)}
+                    {record.total_charge_cents > 0 ? `$${(record.total_charge_cents / 100).toFixed(2)}` : "$0.00"}
                   </span>
                   <Badge
                     variant="outline"
                     className={cn(
                       "text-[10px]",
-                      invoice.status === "paid" && "border-emerald-500/30 text-emerald-400",
-                      invoice.status === "open" && "border-amber-500/30 text-amber-400",
-                      invoice.status === "void" && "border-slate-500/30 text-slate-400"
+                      record.status === "paid" && "border-emerald-500/30 text-emerald-400",
+                      record.status === "open" && "border-amber-500/30 text-amber-400",
                     )}
                   >
-                    {invoice.status}
+                    {record.status}
                   </Badge>
-                  {invoice.hosted_invoice_url ? (
-                    <a
-                      href={invoice.hosted_invoice_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-400 hover:underline text-xs flex items-center gap-1"
-                    >
-                      <Download className="size-3" />
-                      Download
-                    </a>
-                  ) : (
-                    <span className="text-xs text-slate-600 w-[80px]" />
-                  )}
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-slate-500 text-center py-4">No invoices yet</p>
+            <p className="text-sm text-slate-500 text-center py-4">No billing records yet</p>
           )}
         </CardContent>
       </Card>

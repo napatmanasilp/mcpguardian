@@ -44,6 +44,20 @@ export async function addServer(
   }
 
   const svc = createServiceClient();
+
+  // Check server limit
+  const { getTier } = await import("@/lib/tier-catalog");
+  const tier = getTier(ctx.plan ?? "free");
+  if (tier && tier.mcpServerLimit !== null) {
+    const { count } = await svc
+      .from("mcp_servers")
+      .select("*", { count: "exact", head: true })
+      .eq("organization_id", ctx.organizationId);
+    if ((count ?? 0) >= tier.mcpServerLimit) {
+      return { error: `You've reached the ${tier.mcpServerLimit} server limit on the ${tier.displayName} plan. Upgrade to add more.` };
+    }
+  }
+
   const { name, transport, endpoint, command } = parsed.data;
   const authHeader = raw.authHeader?.trim() || null;
 

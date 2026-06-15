@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getPlanGates, OVERAGE_RATES } from "@/lib/plan-limits";
+import { getTier } from "@/lib/tier-catalog";
 
 // ─── Types ────────────────────────────────────────────────────────────
 
@@ -176,12 +177,13 @@ export async function requireOrgById(
 
 export function checkScanLimit(org: OrgContext): NextResponse | null {
   if (org.planId === "enterprise") return null;
-  const limit = org.planGates.checksPerMonth;
-  if (limit === -1) return null; // unlimited
-  if (org.scansUsed >= limit) {
+  const tier = getTier(org.planId);
+  if (!tier) return null;
+  if (tier.scanAllowance === null) return null; // unlimited
+  if (org.scansUsed >= tier.scanAllowance) {
     return err(
       "SCAN_LIMIT_REACHED",
-      `You've used ${org.scansUsed} of ${limit} monthly scans. Upgrade or purchase more.`,
+      `You've used ${org.scansUsed} of ${tier.scanAllowance} monthly scans on the ${tier.displayName} plan. Upgrade to get more.`,
       429,
     );
   }
@@ -189,12 +191,25 @@ export function checkScanLimit(org: OrgContext): NextResponse | null {
 }
 
 export function checkToolCallLimit(org: OrgContext): { allowed: boolean; overage: boolean } {
-  const limit = org.planGates.checksPerMonth; // tool_calls tracked same bucket
-  if (limit === -1) return { allowed: true, overage: false };
-  if (org.toolCallsUsed >= limit && !org.planGates.overage) {
+  const tier = getTier(org.planId);
+  if (!tier || tier.toolCallAllowance === null) return { allowed: true, overage: false };
+  if (org.toolCallsUsed >= tier.toolCallAllowance && !org.planGates.overage) {
     return { allowed: false, overage: false };
   }
-  return { allowed: true, overage: org.toolCallsUsed >= limit };
+  return { allowed: true, overage: org.toolCallsUsed >= tier.toolCallAllowance };
+}
+
+export function checkServerLimit(org: OrgContext, currentServerCount: number): NextResponse | null {
+  const tier = getTier(org.planId);
+  if (!tier || tier.mcpServerLimit === null) return null; // unlimited
+  if (currentServerCount >= tier.mcpServerLimit) {
+    return err(
+      "SERVER_LIMIT_REACHED",
+      `You've reached the ${tier.mcpServerLimit} server limit on the ${tier.displayName} plan. Upgrade to add more servers.`,
+      429,
+    );
+  }
+  return null;
 }
 
 // ─── Increment Usage Counters ───────────────────────────────────────

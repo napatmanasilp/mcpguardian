@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 
-import { err, ok, isError, requireUser, requireOrg } from "@/lib/api-helpers";
+import { err, ok, isError, requireUser, requireOrg, checkServerLimit } from "@/lib/api-helpers";
 import { runScanPipeline } from "@/workers/scan-pipeline";
 
 const AddServerSchema = z
@@ -35,6 +35,15 @@ export async function POST(request: NextRequest) {
   if (isError(orgCtx)) return orgCtx;
 
   const { org, svc } = orgCtx;
+
+  // Check server limit for this plan
+  const { count: serverCount } = await svc
+    .from("mcp_servers")
+    .select("*", { count: "exact", head: true })
+    .eq("organization_id", org.orgId);
+
+  const limitCheck = checkServerLimit(org, serverCount ?? 0);
+  if (limitCheck) return limitCheck;
 
   let body: unknown;
   try {
