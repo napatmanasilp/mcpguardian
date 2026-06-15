@@ -35,22 +35,29 @@ import { cn } from "@/lib/utils";
 const CODE_LANGUAGES = ["curl", "node.js", "python"] as const;
 type CodeLang = (typeof CODE_LANGUAGES)[number];
 
-function getCodeSnippet(lang: CodeLang, apiKey: string, proxyUrl: string): string {
+function getCodeSnippet(lang: CodeLang, apiKey: string, mcpServerUrl: string): string {
   const masked = apiKey ? apiKey : "mcpg_sk_••••••••••••••••••••••••••••••••";
   switch (lang) {
     case "curl":
-      return `curl -X POST ${proxyUrl} \\
+      return `curl -X POST ${mcpServerUrl} \\
   -H "Authorization: Bearer ${masked}" \\
   -H "Content-Type: application/json" \\
-  -d '{"method": "tools/list"}'`;
+  -H "Accept: application/json, text/event-stream" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}'`;
     case "node.js":
-      return `const response = await fetch("${proxyUrl}", {
+      return `const response = await fetch("${mcpServerUrl}", {
   method: "POST",
   headers: {
     "Authorization": "Bearer ${masked}",
     "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
   },
-  body: JSON.stringify({ method: "tools/list" }),
+  body: JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/list",
+    params: {},
+  }),
 });
 
 const data = await response.json();
@@ -59,12 +66,18 @@ console.log(data);`;
       return `import requests
 
 response = requests.post(
-    "${proxyUrl}",
+    "${mcpServerUrl}",
     headers={
         "Authorization": "Bearer ${masked}",
         "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
     },
-    json={"method": "tools/list"},
+    json={
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/list",
+        "params": {},
+    },
 )
 
 print(response.json())`;
@@ -74,13 +87,13 @@ print(response.json())`;
 }
 
 // ── MCP client config snippet ───────────────────────────────────────────
-function getMcpClientConfig(apiKey: string, proxyUrl: string): string {
+function getMcpClientConfig(apiKey: string, mcpServerUrl: string): string {
   const masked = apiKey ? apiKey : "mcpg_sk_••••••••••••••••••••••••••••••••";
   return JSON.stringify(
     {
       mcpServers: {
-        "my-server": {
-          url: proxyUrl,
+        mcpguardian: {
+          url: mcpServerUrl,
           headers: { Authorization: `Bearer ${masked}` },
         },
       },
@@ -109,7 +122,7 @@ export default function OnboardingPage() {
     typeof window !== "undefined"
       ? window.location.origin
       : "http://localhost:3000";
-  const proxyUrl = `${siteOrigin}/api/proxy`;
+  const mcpServerUrl = `${siteOrigin}/api/mcp-server`;
 
   // ── On mount: check if user already has org + key ─────────────────
   useEffect(() => {
@@ -243,20 +256,20 @@ export default function OnboardingPage() {
   }, [apiKey]);
 
   const handleCopyCode = useCallback(() => {
-    const code = getCodeSnippet(selectedLang, apiKey ?? "", proxyUrl);
+    const code = getCodeSnippet(selectedLang, apiKey ?? "", mcpServerUrl);
     navigator.clipboard.writeText(code);
     setCodeCopied(true);
     toast.success("Code copied");
     setTimeout(() => setCodeCopied(false), 2000);
-  }, [apiKey, selectedLang, proxyUrl]);
+  }, [apiKey, selectedLang, mcpServerUrl]);
 
   const handleCopyConfig = useCallback(() => {
-    const config = getMcpClientConfig(apiKey ?? "", proxyUrl);
+    const config = getMcpClientConfig(apiKey ?? "", mcpServerUrl);
     navigator.clipboard.writeText(config);
     setConfigCopied(true);
     toast.success("Config copied");
     setTimeout(() => setConfigCopied(false), 2000);
-  }, [apiKey, proxyUrl]);
+  }, [apiKey, mcpServerUrl]);
 
   // ── Loading state ─────────────────────────────────────────────────
   if (isLoading) {
@@ -277,11 +290,10 @@ export default function OnboardingPage() {
             <ShieldLogo className="size-10" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white">
-            Secure your first MCP server
+            Set up MCPGuardian
           </h1>
           <p className="text-sm text-white/50 max-w-md mx-auto">
-            Follow the steps to connect your MCP server through MCPGuardian for
-            runtime protection.
+            Add MCPGuardian as a tool in your AI agent to scan MCP servers, detect vulnerabilities, and look up CVEs.
           </p>
         </div>
 
@@ -412,12 +424,12 @@ export default function OnboardingPage() {
                 2
               </div>
               <CardTitle className="text-base">
-                Connect your MCP server
+                Add MCPGuardian to your AI agent
               </CardTitle>
             </div>
             <CardDescription className="ml-10 text-xs">
-              Add this config to your MCP client (Claude Desktop, Cursor, etc.)
-              or make an API call to verify the connection.
+              Add this config to your MCP client (Claude Desktop, Cursor, Kiro, etc.)
+              to give your agent security scanning tools.
             </CardDescription>
           </CardHeader>
           <CardContent className="ml-10 space-y-4">
@@ -446,7 +458,7 @@ export default function OnboardingPage() {
               </div>
               <div className="rounded-lg border border-white/10 bg-black/50 p-3">
                 <pre className="font-mono text-[11px] leading-relaxed text-white/80 overflow-x-auto">
-                  {getMcpClientConfig(apiKey ?? "", proxyUrl)}
+                  {getMcpClientConfig(apiKey ?? "", mcpServerUrl)}
                 </pre>
               </div>
             </div>
@@ -496,7 +508,7 @@ export default function OnboardingPage() {
               </div>
               <div className="rounded-lg border border-white/10 bg-black/50 p-3">
                 <pre className="font-mono text-[11px] leading-relaxed text-white/80 overflow-x-auto whitespace-pre-wrap">
-                  {getCodeSnippet(selectedLang, apiKey ?? "", proxyUrl)}
+                  {getCodeSnippet(selectedLang, apiKey ?? "", mcpServerUrl)}
                 </pre>
               </div>
             </div>

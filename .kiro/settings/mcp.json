@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "my-server": {
-      "url": "https://mcpauth.vercel.app/api/proxy",
+    "mcpguardian": {
+      "url": "https://mcpauth.vercel.app/api/mcp-server",
       "headers": {
-        "Authorization": "Bearer mcpg_sk_8d108dddee0e9c101db8e12784f096557dc6ebde51b191a6"
+        "Authorization": "Bearer mcpg_sk_13e799e08790cfec1bb0d476cb0a63890100e23c93e0c04a"
       }
     }
   }
