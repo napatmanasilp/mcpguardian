@@ -120,11 +120,14 @@ export async function runScanPipeline(payload: ScanPipelinePayload): Promise<{ s
     }
 
     // ── Calculate overall result ────────────────────────────────────
-    const riskScore = scanResult.score;
+    // scanResult.score is a SAFETY score (100 = safe, 0 = dangerous)
+    // risk_score in DB is RISK (100 = dangerous, 0 = safe)
+    const safetyScore = scanResult.score;
+    const riskScore = 100 - safetyScore;
     let overallResult: "clean" | "suspicious" | "malicious" | "error";
-    if (riskScore < 20) {
+    if (riskScore <= 20) {
       overallResult = "clean";
-    } else if (riskScore <= 60) {
+    } else if (riskScore <= 50) {
       overallResult = "suspicious";
     } else {
       overallResult = "malicious";
