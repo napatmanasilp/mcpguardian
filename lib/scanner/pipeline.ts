@@ -40,14 +40,25 @@ function runStaticConfigAnalysis(name: string, server: McpServerInput): { issues
     const hasAuthHeader = server.headers &&
       Object.keys(server.headers).some(k => k.toLowerCase() === 'authorization');
     if (!hasAuthHeader) {
-      deduction += 25;
+      // For HTTPS servers, this is a medium concern (server may use OAuth or other auth)
+      // For HTTP servers, this is high (no encryption + no auth = fully exposed)
+      const isHttps = server.url.startsWith('https://');
+      const severity = isHttps ? 'MEDIUM' : 'HIGH';
+      const penalty = isHttps ? 10 : 25;
+      deduction += penalty;
       issues.push({
         type: 'MISSING_AUTH_HEADER',
-        severity: 'HIGH',
-        title: 'Remote MCP server has no Authorization header configured',
-        description: `Server "${name}" uses URL "${server.url}" but has no Authorization header. Any client can connect to this endpoint without credentials. Add an Authorization header with a Bearer token or API key.`,
-        fix: 'Add an Authorization header with a Bearer token or API key to the server configuration',
-        deduction: 25,
+        severity: severity as 'MEDIUM' | 'HIGH',
+        title: isHttps
+          ? 'No Authorization header configured — server may use OAuth or other auth'
+          : 'Remote MCP server has no Authorization header and no encryption',
+        description: isHttps
+          ? `Server "${name}" uses HTTPS but has no Authorization header in this config. If the server uses OAuth or session-based auth, this is expected. Otherwise, add a Bearer token.`
+          : `Server "${name}" uses insecure HTTP with no Authorization header. Any network observer can intercept and connect.`,
+        fix: isHttps
+          ? 'If the server requires auth, add an Authorization header. If it uses OAuth, you can safely ignore this.'
+          : 'Switch to HTTPS and add an Authorization header with a Bearer token or API key',
+        deduction: penalty,
       });
     }
   }
@@ -123,34 +134,26 @@ function runStaticConfigAnalysis(name: string, server: McpServerInput): { issues
     const isSafeCommand = SAFE_COMMANDS.has(server.command.toLowerCase());
 
     if (isSafeCommand) {
-      deduction += 15;
+      // Safe runtimes (node, npx, python, etc.) are the standard way to run MCP servers
+      // This is informational, not a significant risk
+      deduction += 5;
       issues.push({
         type: 'STDIO_TRANSPORT',
-        severity: 'HIGH',
-        title: 'Server uses STDIO transport',
-        description: `Server "${name}" uses STDIO transport via command "${server.command}" which may allow arbitrary local execution`,
-        fix: 'Use HTTPS-based transport instead of STDIO when possible, or restrict the command to a known-safe binary',
-        deduction: 15,
+        severity: 'LOW',
+        title: 'Server uses STDIO transport with approved runtime',
+        description: `Server "${name}" uses STDIO transport via "${server.command}". This is the standard MCP transport for local servers. Runtime execution is managed by the client.`,
+        fix: 'No action needed — STDIO with approved runtimes is standard practice. Consider HTTPS for remote/shared servers.',
+        deduction: 5,
       });
     } else {
       deduction += 30;
       issues.push({
         type: 'STDIO_TRANSPORT',
         severity: 'CRITICAL',
-        title: 'STDIO transport enables arbitrary command execution (RCE risk)',
-        description: `MCP's STDIO transport allows any OS command to be executed. This is a systemic design issue (ref: OX Security Advisory April 2026) affecting 150M+ downloads. The command field accepts arbitrary OS commands — not just MCP server binaries.`,
-        fix: 'Use HTTPS-based transport instead of STDIO when possible, or restrict the command to a known-safe binary',
+        title: 'STDIO transport with unknown command — arbitrary execution risk',
+        description: `MCP's STDIO transport allows OS commands to be executed. Server "${name}" uses command "${server.command}" which is not in the approved runtime allowlist.`,
+        fix: 'Use only approved runtimes: node, npx, python3, uvx, deno, bun, docker',
         deduction: 30,
-      });
-
-      deduction += 25;
-      issues.push({
-        type: 'UNSAFE_COMMAND',
-        severity: 'CRITICAL',
-        title: 'Command not in safe allowlist — arbitrary execution risk',
-        description: `Server "${name}" uses command "${server.command}" which is not in the approved runtime allowlist. Custom executables may introduce untrusted code execution paths.`,
-        fix: 'Use only approved runtimes: node, npx, python3, uvx, deno, bun',
-        deduction: 25,
       });
     }
 
@@ -441,6 +444,16 @@ export async function runFreeModePipeline(
         // Add probe issues (MISSING_AUTHENTICATION, poisoning, etc.)
         allIssues.push(...probeResult.poisoningIssues);
 
+        // If server requires auth (401/403), treat as positive and skip further probing
+        if (probeResult.requiresAuth) {
+          steps.push({
+            stepName: 'BEHAVIOR_PROBE',
+            status: 'PASS',
+            issues: probeResult.poisoningIssues,
+            details: 'Server correctly enforces authentication — unauthorized access blocked',
+          });
+        } else {
+
         // 3.4 Sandbox-verified hash (authoritative rug-pull detection)
         // Fast Docker check: docker --version returns immediately; docker info would hang 5s
         let dockerAvailable = false;
@@ -524,6 +537,7 @@ export async function runFreeModePipeline(
             ? `Probe succeeded — ${probeResult.toolCount} tool(s), ${probeResult.promptsCount ?? 0} prompt(s), ${probeResult.resourcesCount ?? 0} resource(s)`
             : 'Probe succeeded — no tools exposed',
         });
+        } // end else (server did NOT require auth)
       }
     } catch {
       allIssues.push({
