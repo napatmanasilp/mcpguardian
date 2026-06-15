@@ -62,9 +62,9 @@ const scoringCaps: CapRule[] = [
   },
   {
     check: (issues) =>
-      issues.some(i => i.type === 'PROBE_FAILED' || i.type === 'BEHAVIORAL_PROBE_SKIPPED'),
+      issues.some(i => i.type === 'PROBE_FAILED'),
     maxScore: 70,
-    description: 'Behavioral probe not completed → MAX 70 (C)',
+    description: 'Server unreachable — probe failed → MAX 70 (C)',
   },
   {
     check: (issues) =>
