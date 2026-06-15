@@ -7,6 +7,7 @@ import {
   handleGetScanHistory,
 } from '@/lib/mcp-server/tools';
 import { validateApiKey } from '@/lib/api-key-auth';
+import { createServiceClient } from '@/lib/supabase/service';
 
 /**
  * MCPGuardian MCP Server — Stateless JSON-RPC 2.0 implementation
@@ -116,7 +117,7 @@ function jsonRpcError(id: unknown, code: number, message: string) {
 
 export async function POST(request: NextRequest) {
   // Optional auth
-  await validateApiKey(request);
+  const apiKeyResult = await validateApiKey(request);
 
   let body: { jsonrpc?: string; id?: unknown; method?: string; params?: unknown };
   try {
@@ -181,6 +182,29 @@ Available tools:
 
     try {
       const result = await handleToolCall(toolName, args);
+
+      // Track tool call usage (fire-and-forget)
+      if (apiKeyResult) {
+        const svc = createServiceClient();
+        // Look up user's org and increment tool call counter
+        svc.from("organization_members")
+          .select("organization_id")
+          .eq("user_id", apiKeyResult.userId)
+          .eq("invitation_status", "accepted")
+          .limit(1)
+          .maybeSingle()
+          .then(({ data: membership }) => {
+            if (membership) {
+              svc.rpc("increment_org_tool_calls", { org_id: membership.organization_id }).then(() => {});
+            }
+          });
+        // Update api key last_used_at
+        svc.from("api_keys")
+          .update({ last_used_at: new Date().toISOString() })
+          .eq("id", apiKeyResult.apiKeyId)
+          .then(() => {});
+      }
+
       return jsonRpcResponse(id, {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       });
