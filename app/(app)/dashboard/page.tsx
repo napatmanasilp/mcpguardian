@@ -236,13 +236,11 @@ export default async function DashboardPage() {
           {serverCount} server{serverCount !== 1 ? "s" : ""} online
         </span>
         <div className="ml-auto hidden sm:flex items-center gap-2">
-          {!proxyIsActive && (
-            <Link href="/onboarding/proxy-setup">
-              <Button size="xs" variant="outline" className="border-caution/30 text-caution h-7 text-[10px] gap-1">
-                Connect proxy <ArrowRight className="size-3" />
-              </Button>
-            </Link>
-          )}
+          <Link href="/servers/new">
+            <Button size="xs" variant="outline" className="border-monitor/30 text-monitor h-7 text-[10px] gap-1">
+              Add server <ArrowRight className="size-3" />
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -315,7 +313,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* RIGHT: Runtime Protection */}
+        {/* RIGHT: Scan Activity */}
         <Card className="border-white/10 bg-bg-surface" style={{ borderTop: "2px solid var(--secure)" }}>
           <CardHeader className="pb-3">
             <div className="flex items-center gap-2">
@@ -323,45 +321,32 @@ export default async function DashboardPage() {
                 <Shield className="size-3.5 text-secure" />
               </div>
               <CardTitle className="text-xs font-semibold tracking-wider text-slate-400 uppercase">
-                Runtime Protection
+                Scan Activity
               </CardTitle>
             </div>
           </CardHeader>
           <CardContent>
-            {proxyIsActive ? (
-              <div className="grid grid-cols-3 gap-4 min-w-0">
-                <div className="text-center">
-                  <p className="text-2xl font-bold font-mono text-slate-200">{activeSessions ?? 0}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Active sessions</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-2xl font-bold font-mono text-slate-200">{scansToday ?? 0}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Scans today</p>
-                </div>
-                <div className="text-center">
-                  <p
-                    className={cn(
-                      "text-2xl font-bold font-mono",
-                      threatsToday && threatsToday > 0 ? "text-threat" : "text-slate-200"
-                    )}
-                  >
-                    {threatsToday ?? 0}
-                  </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Threats today</p>
-                </div>
+            <div className="grid grid-cols-3 gap-4 min-w-0">
+              <div className="text-center">
+                <p className="text-2xl font-bold font-mono text-slate-200">{serverCount}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Servers</p>
               </div>
-            ) : (
-              <div className="text-center py-4">
-                <CloudOff className="size-8 text-slate-600 mx-auto mb-2" />
-                <p className="text-sm text-slate-500 mb-3">Proxy not connected — no runtime protection active</p>
-                <Link href="/onboarding/proxy-setup">
-                  <Button size="sm" variant="outline" className="border-monitor/30 text-monitor gap-1.5">
-                    <Shield className="size-3.5" />
-                    Enable runtime protection <ArrowRight className="size-3.5" />
-                  </Button>
-                </Link>
+              <div className="text-center">
+                <p className="text-2xl font-bold font-mono text-slate-200">{scansToday ?? 0}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Scans today</p>
               </div>
-            )}
+              <div className="text-center">
+                <p
+                  className={cn(
+                    "text-2xl font-bold font-mono",
+                    threatsToday && threatsToday > 0 ? "text-threat" : "text-slate-200"
+                  )}
+                >
+                  {threatsToday ?? 0}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Threats today</p>
+              </div>
+            </div>
             {avgLatency !== null && (
               <p className="mt-3 text-[10px] text-slate-500 text-center font-mono">
                 Avg proxy latency: {avgLatency}ms

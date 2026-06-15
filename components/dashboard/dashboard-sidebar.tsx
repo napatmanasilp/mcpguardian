@@ -44,17 +44,8 @@ const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
     label: "MONITOR",
     items: [
       { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { href: "/activity", label: "Threat Log", icon: Radar },
-      { href: "/alerts", label: "Alerts", icon: Bell },
-      { href: "/telemetry", label: "Telemetry", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "PROTECT",
-    items: [
       { href: "/servers", label: "Servers", icon: Server },
-      { href: "/sessions", label: "Sessions", icon: Activity },
-      { href: "/compliance", label: "Compliance", icon: Shield },
+      { href: "/alerts", label: "Alerts", icon: Bell },
     ],
   },
   {

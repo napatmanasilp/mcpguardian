@@ -27,11 +27,10 @@ const BOTTOM_NAV = [
 ];
 
 const MORE_ITEMS = [
-  { href: "/activity", icon: Radar, label: "Threat Log" },
-  { href: "/telemetry", icon: FileText, label: "Telemetry" },
-  { href: "/sessions", icon: Activity, label: "Sessions" },
-  { href: "/compliance", icon: Shield, label: "Compliance" },
-  { href: "/settings", icon: Settings, label: "Settings" },
+  { href: "/settings/general", icon: Settings, label: "Settings" },
+  { href: "/settings/billing", icon: Settings, label: "Billing" },
+  { href: "/settings/api-keys", icon: Settings, label: "API Keys" },
+  { href: "/settings/team", icon: Settings, label: "Team" },
 ];
 
 export function MobileNav({ unreadAlerts = 0 }: { unreadAlerts?: number }) {

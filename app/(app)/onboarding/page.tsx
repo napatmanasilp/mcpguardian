@@ -556,7 +556,7 @@ export default function OnboardingPage() {
 
             <button
               type="button"
-              onClick={() => router.push("/sessions")}
+              onClick={() => router.push("/alerts")}
               className="flex w-full items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:bg-white/10 transition-colors group text-left"
             >
               <div className="flex size-8 items-center justify-center rounded-full bg-emerald-500/15">
@@ -564,10 +564,10 @@ export default function OnboardingPage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-white/80">
-                  View proxy sessions
+                  View alerts
                 </p>
                 <p className="text-xs text-white/40">
-                  Monitor runtime tool calls in real time.
+                  Monitor security findings and threats.
                 </p>
               </div>
               <ChevronRight className="size-4 text-white/30 group-hover:text-white/60 transition-colors" />
