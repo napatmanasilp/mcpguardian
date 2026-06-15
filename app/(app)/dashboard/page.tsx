@@ -35,11 +35,12 @@ import { isWarningThreshold } from "@/lib/utils/usage";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
-interface ThreatEntry {
+// Threat entries from scan results (non-clean scans)
+interface ScanThreat {
   id: string;
-  tool_name: string;
-  was_blocked: boolean;
-  threat_type: string | null;
+  overall_result: string | null;
+  risk_score: number | null;
+  findings: unknown;
   created_at: string;
   mcp_server_id?: string;
 }
@@ -110,10 +111,11 @@ export default async function DashboardPage() {
       .limit(1)
       .maybeSingle(),
     svc
-      .from("tool_invocation_logs")
-      .select("id, tool_name, was_blocked, threat_type, created_at, mcp_server_id")
+      .from("scans")
+      .select("id, overall_result, risk_score, findings, created_at, mcp_server_id")
       .eq("organization_id", orgId)
-      .not("threat_type", "is", null)
+      .eq("status", "completed")
+      .not("overall_result", "eq", "clean")
       .order("created_at", { ascending: false })
       .limit(10)
       .then((r) => r, () => ({ data: null, error: null })),
@@ -123,16 +125,16 @@ export default async function DashboardPage() {
       .eq("organization_id", orgId)
       .eq("status", "active"),
     svc
-      .from("tool_invocation_logs")
+      .from("scans")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
       .gte("created_at", todayStart)
       .then((r) => r, () => ({ count: 0, error: null })),
     svc
-      .from("tool_invocation_logs")
+      .from("scans")
       .select("*", { count: "exact", head: true })
       .eq("organization_id", orgId)
-      .eq("was_blocked", true)
+      .eq("overall_result", "malicious")
       .gte("created_at", todayStart)
       .then((r) => r, () => ({ count: 0, error: null })),
     svc
@@ -145,8 +147,8 @@ export default async function DashboardPage() {
 
   // Extract results with fallbacks for tables that may have schema mismatches
   const recentThreats = recentThreatsResult?.data ?? null;
-  const toolCallsToday = toolCallsTodayResult?.count ?? 0;
-  const blockedToday = blockedTodayResult?.count ?? 0;
+  const scansToday = toolCallsTodayResult?.count ?? 0;
+  const threatsToday = blockedTodayResult?.count ?? 0;
 
   if (!org) redirect("/onboarding");
 
@@ -171,7 +173,7 @@ export default async function DashboardPage() {
   // Most recently created server for "Scan Now"
   const mostRecentServerId = servers?.[0]?.id ?? null;
 
-  const isFirstVisit = serverCount <= 1 && (activeSessions ?? 0) === 0 && (toolCallsToday ?? 0) === 0;
+  const isFirstVisit = serverCount <= 1 && (activeSessions ?? 0) === 0 && (scansToday ?? 0) === 0;
 
   // Proxy is considered "connected" if any servers are registered or proxy was directly connected
   const proxyIsActive = !!proxyConnectedAt || serverCount > 0;
@@ -333,19 +335,19 @@ export default async function DashboardPage() {
                   <p className="text-[10px] text-slate-500 mt-0.5">Active sessions</p>
                 </div>
                 <div className="text-center">
-                  <p className="text-2xl font-bold font-mono text-slate-200">{toolCallsToday ?? 0}</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Tool calls today</p>
+                  <p className="text-2xl font-bold font-mono text-slate-200">{scansToday ?? 0}</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Scans today</p>
                 </div>
                 <div className="text-center">
                   <p
                     className={cn(
                       "text-2xl font-bold font-mono",
-                      blockedToday && blockedToday > 0 ? "text-threat" : "text-slate-200"
+                      threatsToday && threatsToday > 0 ? "text-threat" : "text-slate-200"
                     )}
                   >
-                    {blockedToday ?? 0}
+                    {threatsToday ?? 0}
                   </p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">Blocked today</p>
+                  <p className="text-[10px] text-slate-500 mt-0.5">Threats today</p>
                 </div>
               </div>
             ) : (
@@ -420,9 +422,9 @@ export default async function DashboardPage() {
       {/* ── NSA Compliance Teaser (free plans) ─────────────────────────── */}
       {!isPaidPlan && <NSAComplianceTeaser />}
 
-      {/* ── Live Threat Feed ────────────────────────────────────────────── */}
+      {/* ── Recent Threats (scans with issues) ─────────────────────────── */}
       {recentThreats && recentThreats.length > 0 && (
-        <ThreatFeedSection threats={recentThreats as ThreatEntry[]} />
+        <ThreatFeedSection threats={recentThreats as any} />
       )}
 
       {/* ── Usage Meters ────────────────────────────────────────────────── */}
