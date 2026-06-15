@@ -262,11 +262,11 @@ function analyzeAuthHeaders(headers: Record<string, string> | undefined): Issue[
     if (!wwwAuth.includes('code_challenge') && !wwwAuth.includes('pkce') && !wwwAuth.includes('S256')) {
       issues.push({
         type: 'AUTH_NO_PKCE',
-        severity: 'MEDIUM',
-        title: 'OAuth flow lacks PKCE',
-        description: 'Server uses OAuth Bearer without PKCE (Proof Key for Code Exchange) extension, making the authorization code flow vulnerable to interception.',
-        fix: 'Implement PKCE (S256 code challenge method) in the OAuth flow per RFC 7636',
-        deduction: 10,
+        severity: 'LOW',
+        title: 'OAuth flow does not advertise PKCE support',
+        description: 'Server uses OAuth Bearer without indicating PKCE support in WWW-Authenticate header. PKCE is recommended for public clients but many servers implement it without advertising in headers.',
+        fix: 'Consider implementing PKCE (S256 code challenge method) in the OAuth flow per RFC 7636',
+        deduction: 0,
       });
     }
   }

@@ -257,11 +257,11 @@ export async function verifyDomain(url: string): Promise<{ domainCheck: DomainCh
           } else if (ctResult.loggedInCT === false) {
             issues.push({
               type: 'CERT_NOT_IN_CT_LOGS',
-              severity: 'HIGH',
+              severity: 'LOW',
               title: 'Certificate not found in Certificate Transparency logs',
-              description: `Certificate for "${hostname}" was not found in any Certificate Transparency logs. This could indicate a misissued or malicious certificate.`,
-              fix: 'Verify the certificate was issued by a CA that publishes to CT logs. Check https://crt.sh/?q=' + hostname,
-              deduction: 15,
+              description: `Certificate for "${hostname}" was not found in CT logs via crt.sh. This can happen due to CT log propagation delays or API timeouts. Most major CAs publish to CT logs within hours.`,
+              fix: 'Verify manually at https://crt.sh/?q=' + hostname + ' — if the cert appears there, this is a false positive from API timing.',
+              deduction: 0,
             });
           }
         } else {
@@ -282,11 +282,11 @@ export async function verifyDomain(url: string): Promise<{ domainCheck: DomainCh
           if (!hstsResult.present) {
             issues.push({
               type: 'MISSING_HSTS',
-              severity: 'MEDIUM',
-              title: 'Server does not enforce HTTP Strict Transport Security',
-              description: `Server "${hostname}" does not include the Strict-Transport-Security header. Without HSTS, clients are susceptible to SSL stripping attacks.`,
-              fix: 'Add the Strict-Transport-Security header to all HTTPS responses with a max-age of at least 31536000 (1 year).',
-              deduction: 10,
+              severity: 'LOW',
+              title: 'Server does not include HSTS header',
+              description: `Server "${hostname}" does not include the Strict-Transport-Security header. For MCP API servers, this is a minor concern since clients typically enforce HTTPS by configuration rather than browser redirects.`,
+              fix: 'Consider adding Strict-Transport-Security header for defense-in-depth.',
+              deduction: 0,
             });
           } else if (hstsResult.maxAge !== null && hstsResult.maxAge < 86400) {
             issues.push({
