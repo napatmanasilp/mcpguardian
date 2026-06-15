@@ -22,21 +22,21 @@ export interface CapRule {
 const scoringCaps: CapRule[] = [
   {
     check: (issues) =>
-      issues.some(i => i.type === 'MISSING_AUTH_HEADER' || i.type === 'MISSING_AUTHENTICATION') &&
+      issues.some(i => i.type === 'MISSING_AUTHENTICATION') &&
       issues.some(i => i.type === 'SECRET_IN_URL'),
     maxScore: 40,
-    description: 'Missing auth + secret in URL → MAX 40 (F)',
+    description: 'Unauthenticated server + secret in URL → MAX 40 (F)',
   },
   {
     check: (issues) =>
-      issues.some(i => i.type === 'MISSING_AUTH_HEADER' || i.type === 'MISSING_AUTHENTICATION') &&
+      issues.some(i => i.type === 'MISSING_AUTHENTICATION') &&
       !issues.some(i => i.type === 'SECRET_IN_URL'),
     maxScore: 70,
-    description: 'Missing auth only → MAX 70 (C)',
+    description: 'Server accepts unauthenticated connections → MAX 70 (C)',
   },
   {
     check: (issues) =>
-      !issues.some(i => i.type === 'MISSING_AUTH_HEADER' || i.type === 'MISSING_AUTHENTICATION') &&
+      !issues.some(i => i.type === 'MISSING_AUTHENTICATION') &&
       issues.some(i => i.type === 'SECRET_IN_URL'),
     maxScore: 45,
     description: 'Secret in URL only → MAX 45 (F)',
