@@ -1,26 +1,18 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { ArrowRight, ShieldAlert } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
-interface ThreatEntry {
+interface ScanThreat {
   id: string;
-  tool_name: string;
-  was_blocked: boolean;
-  threat_type: string | null;
+  overall_result: string | null;
+  risk_score: number | null;
+  findings: unknown;
   created_at: string;
   mcp_server_id?: string;
 }
@@ -35,23 +27,25 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function threatColor(type: string | null, blocked: boolean): string {
-  if (blocked) return "border-l-red-500/60 bg-red-500/5";
-  if (type) return "border-l-amber-400/60 bg-amber-500/5";
+function resultColor(result: string | null): string {
+  if (result === "malicious") return "border-l-red-500/60 bg-red-500/5";
+  if (result === "suspicious") return "border-l-amber-400/60 bg-amber-500/5";
   return "border-l-emerald-500/60 bg-emerald-500/5";
 }
 
-export function ThreatFeedSection({ threats }: { threats: ThreatEntry[] }) {
-  const [filter, setFilter] = useState("all");
+function resultLabel(result: string | null): string {
+  if (result === "malicious") return "Malicious";
+  if (result === "suspicious") return "Suspicious";
+  return "Clean";
+}
 
-  const filtered = filter === "all"
-    ? threats
-    : threats.filter((t) => {
-        if (filter === "blocked") return t.was_blocked;
-        if (filter === "flagged") return !t.was_blocked && t.threat_type !== null;
-        if (filter === "clean") return !t.was_blocked && t.threat_type === null;
-        return true;
-      });
+function getFindingsCount(findings: unknown): number {
+  if (Array.isArray(findings)) return findings.length;
+  return 0;
+}
+
+export function ThreatFeedSection({ threats }: { threats: ScanThreat[] }) {
+  if (!threats || threats.length === 0) return null;
 
   return (
     <Card className="border-white/10 bg-bg-surface animate-slide-up">
@@ -59,53 +53,53 @@ export function ThreatFeedSection({ threats }: { threats: ThreatEntry[] }) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ShieldAlert className="size-4 text-threat" />
-            <CardTitle className="text-sm font-semibold text-slate-200">Live Threat Feed</CardTitle>
+            <CardTitle className="text-sm font-semibold text-slate-200">Recent Security Findings</CardTitle>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Filter dropdown */}
-            <Select value={filter} onValueChange={setFilter}>
-              <SelectTrigger className="w-32 h-7 text-xs border-white/10 bg-white/5">
-                <SelectValue placeholder="All Events" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Events</SelectItem>
-                <SelectItem value="blocked">Blocked</SelectItem>
-                <SelectItem value="flagged">Flagged</SelectItem>
-                <SelectItem value="clean">Clean</SelectItem>
-              </SelectContent>
-            </Select>
-            <Link href="/activity">
-              <Button size="xs" variant="link" className="text-[10px] text-blue-400 gap-1">
-                View all <ArrowRight className="size-3" />
-              </Button>
-            </Link>
-          </div>
+          <Link href="/alerts">
+            <Button size="xs" variant="link" className="text-[10px] text-blue-400 gap-1">
+              View all <ArrowRight className="size-3" />
+            </Button>
+          </Link>
         </div>
       </CardHeader>
       <CardContent className="space-y-1">
-        {filtered.slice(0, 10).map((threat, i) => (
-          <Link
-            key={threat.id}
-            href={threat.mcp_server_id ? `/sessions/${threat.mcp_server_id}` : "#"}
-            className={cn(
-              "group flex items-center justify-between border-l-2 pl-3 pr-2 py-2 rounded-r-md transition-all duration-150 hover:brightness-110",
-              threatColor(threat.threat_type, threat.was_blocked),
-            )}
-            style={{ animationDelay: `${i * 50}ms` }}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="font-mono text-xs text-slate-300 truncate">{threat.tool_name}</span>
-              {threat.threat_type && (
-                <Badge variant="destructive" className="text-[9px] px-1 py-0 h-4 shrink-0">
-                  {threat.threat_type}
-                </Badge>
+        {threats.slice(0, 10).map((scan, i) => {
+          const findingsCount = getFindingsCount(scan.findings);
+          return (
+            <Link
+              key={scan.id}
+              href={`/reports/${scan.id}`}
+              className={cn(
+                "group flex items-center justify-between border-l-2 pl-3 pr-2 py-2 rounded-r-md transition-all duration-150 hover:brightness-110",
+                resultColor(scan.overall_result),
               )}
-            </div>
-            <span className="text-[10px] font-mono text-slate-500 shrink-0 ml-2">
-              {timeAgo(threat.created_at)}
-            </span>
-          </Link>
-        ))}
+              style={{ animationDelay: `${i * 50}ms` }}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={cn(
+                  "font-mono text-xs font-bold",
+                  scan.risk_score && scan.risk_score > 60 ? "text-red-400" :
+                  scan.risk_score && scan.risk_score > 30 ? "text-amber-400" :
+                  "text-emerald-400"
+                )}>
+                  {scan.risk_score ?? 0}
+                </span>
+                <Badge
+                  variant={scan.overall_result === "malicious" ? "destructive" : "secondary"}
+                  className="text-[9px] px-1 py-0 h-4 shrink-0"
+                >
+                  {resultLabel(scan.overall_result)}
+                </Badge>
+                {findingsCount > 0 && (
+                  <span className="text-[10px] text-slate-500">{findingsCount} finding{findingsCount > 1 ? "s" : ""}</span>
+                )}
+              </div>
+              <span className="text-[10px] font-mono text-slate-500 shrink-0 ml-2">
+                {timeAgo(scan.created_at)}
+              </span>
+            </Link>
+          );
+        })}
       </CardContent>
     </Card>
   );

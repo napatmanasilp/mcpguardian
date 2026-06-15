@@ -332,26 +332,21 @@ export default async function DashboardPage() {
                 <p className="text-[10px] text-slate-500 mt-0.5">Servers</p>
               </div>
               <div className="text-center">
-                <p className="text-2xl font-bold font-mono text-slate-200">{scansToday ?? 0}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Scans today</p>
+                <p className="text-2xl font-bold font-mono text-slate-200">{scansUsedCount}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Scans this month</p>
               </div>
               <div className="text-center">
                 <p
                   className={cn(
                     "text-2xl font-bold font-mono",
-                    threatsToday && threatsToday > 0 ? "text-threat" : "text-slate-200"
+                    threatCount > 0 ? "text-threat" : "text-slate-200"
                   )}
                 >
-                  {threatsToday ?? 0}
+                  {threatCount}
                 </p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Threats today</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Threats found</p>
               </div>
             </div>
-            {avgLatency !== null && (
-              <p className="mt-3 text-[10px] text-slate-500 text-center font-mono">
-                Avg proxy latency: {avgLatency}ms
-              </p>
-            )}
           </CardContent>
         </Card>
       </div>
@@ -409,7 +404,7 @@ export default async function DashboardPage() {
 
       {/* ── Recent Threats (scans with issues) ─────────────────────────── */}
       {recentThreats && recentThreats.length > 0 && (
-        <ThreatFeedSection threats={recentThreats as any} />
+        <ThreatFeedSection threats={recentThreats} />
       )}
 
       {/* ── Usage Meters ────────────────────────────────────────────────── */}
