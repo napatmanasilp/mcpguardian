@@ -68,19 +68,18 @@ export async function POST(
   // Increment scan counter (fire-and-forget)
   svc.rpc("increment_org_scans", { org_id: org.orgId }).then(() => {});
 
-  // Trigger the scan pipeline in the background
+  // Run the scan pipeline inline (must complete before response on Vercel)
   const pipelinePayload: ScanPipelinePayload = {
     scanId: scan.id,
     organizationId: org.orgId,
     mcpServerId: serverId,
   };
 
-  runScanPipeline(pipelinePayload).catch((pipelineErr) => {
-    console.error(
-      `[rescan] Pipeline failed for scan ${scan.id}:`,
-      pipelineErr,
-    );
-  });
+  const pipelineResult = await runScanPipeline(pipelinePayload);
 
-  return ok({ scanId: scan.id, status: "queued" }, 201);
+  if (!pipelineResult.success) {
+    return ok({ scanId: scan.id, status: "failed", error: pipelineResult.error }, 200);
+  }
+
+  return ok({ scanId: scan.id, status: "completed" }, 201);
 }

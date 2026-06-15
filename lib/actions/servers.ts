@@ -72,7 +72,7 @@ export async function addServer(
     return { error: "Failed to create server. Please try again." };
   }
 
-  // Trigger initial scan (non-blocking)
+  // Trigger initial scan (inline — must complete before Vercel kills the function)
   try {
     const { data: scan } = await svc
       .from("scans")
@@ -94,20 +94,15 @@ export async function addServer(
     if (scan) {
       svc.rpc("increment_org_scans", { org_id: ctx.organizationId }).then(() => {});
 
-      runScanPipeline({
+      await runScanPipeline({
         scanId: scan.id,
         organizationId: ctx.organizationId,
         mcpServerId: mcpServer.id,
-      }).catch((pipelineErr) => {
-        console.error(
-          `[addServer] Pipeline failed for scan ${scan.id}:`,
-          pipelineErr,
-        );
       });
     }
   } catch (scanErr) {
     // Non-critical — scan can be triggered later
-    console.error("[addServer] Failed to enqueue initial scan:", scanErr);
+    console.error("[addServer] Failed to run initial scan:", scanErr);
   }
 
   redirect("/servers");
