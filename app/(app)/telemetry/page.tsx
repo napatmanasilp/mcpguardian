@@ -152,8 +152,8 @@ const TelemetryPage = async () => {
                       <div className={cn("size-2 rounded-full shrink-0", reachableServers.has(srv.id) ? "bg-secure" : "bg-threat")} />
                       <span className="text-sm text-slate-200">{srv.name}</span>
                       {srv.risk_score != null && (
-                        <span className={cn("text-xs font-mono", srv.risk_score >= 70 ? "text-threat" : srv.risk_score >= 40 ? "text-caution" : "text-secure")}>
-                          {srv.risk_score}/100
+                        <span className={cn("text-xs font-mono", srv.risk_score <= 20 ? "text-secure" : srv.risk_score <= 50 ? "text-caution" : "text-threat")}>
+                          {Math.max(0, 100 - srv.risk_score)}/100
                         </span>
                       )}
                     </div>

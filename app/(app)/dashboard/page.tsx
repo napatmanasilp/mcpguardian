@@ -274,18 +274,18 @@ export default async function DashboardPage() {
                 <p
                   className="text-2xl font-bold font-mono"
                   style={{
-                    color: lastScanData?.risk_score
-                      ? lastScanData.risk_score >= 80
+                    color: lastScanData?.risk_score != null
+                      ? lastScanData.risk_score <= 20
                         ? "var(--secure)"
-                        : lastScanData.risk_score >= 60
+                        : lastScanData.risk_score <= 50
                           ? "var(--caution)"
                           : "var(--threat)"
                       : "var(--muted-foreground)",
                   }}
                 >
-                  {lastScanData?.risk_score ?? "—"}
+                  {lastScanData?.risk_score != null ? Math.max(0, 100 - lastScanData.risk_score) : "—"}
                 </p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Risk score</p>
+                <p className="text-[10px] text-slate-500 mt-0.5">Safety score</p>
               </div>
               <div className="text-center">
                 <p className="text-2xl font-bold font-mono text-slate-200">{serverCount}</p>
@@ -533,14 +533,14 @@ export default async function DashboardPage() {
                       <span
                         className={cn(
                           "font-mono",
-                          server.last_scan_result === "clean"
+                          server.risk_score <= 20
                             ? "text-secure"
-                            : server.last_scan_result === "suspicious"
+                            : server.risk_score <= 50
                               ? "text-caution"
                               : "text-threat"
                         )}
                       >
-                        {server.risk_score}/100
+                        {Math.max(0, 100 - server.risk_score)}/100
                       </span>
                     )}
                   </div>
@@ -549,13 +549,13 @@ export default async function DashboardPage() {
                       <div
                         className={cn(
                           "h-full rounded-full transition-all duration-500",
-                          server.risk_score >= 80
+                          server.risk_score <= 20
                             ? "bg-secure"
-                            : server.risk_score >= 60
+                            : server.risk_score <= 50
                               ? "bg-caution"
                               : "bg-threat"
                         )}
-                        style={{ width: `${server.risk_score}%` }}
+                        style={{ width: `${100 - server.risk_score}%` }}
                       />
                     </div>
                   )}

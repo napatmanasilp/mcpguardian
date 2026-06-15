@@ -18,6 +18,10 @@ const ALL_STATUSES = [
   "expired",
 ] as const;
 
+const validDateArb = fc
+  .integer({ min: 1577836800000, max: 1893456000000 })
+  .map((ts) => new Date(ts).toISOString());
+
 describe("Property 20: Rug-pull tooltip wraps every 'rug pull' occurrence", () => {
   it("RUG_PULL_DESCRIPTION constant always equals the exact required tooltip text", () => {
     // The tooltip text constant must be exactly the required string — verified as a property
@@ -28,7 +32,7 @@ describe("Property 20: Rug-pull tooltip wraps every 'rug pull' occurrence", () =
           id: fc.uuid(),
           status: fc.constant("terminated_rug_pull"),
           tool_call_count: fc.integer({ min: 0, max: 1000 }),
-          started_at: fc.date().map((d) => d.toISOString()),
+          started_at: validDateArb,
         }),
         (_session) => {
           // For any session with terminated_rug_pull status, the tooltip text must be exact
@@ -49,7 +53,7 @@ describe("Property 20: Rug-pull tooltip wraps every 'rug pull' occurrence", () =
             fc.integer({ min: 0, max: 10000 }),
             fc.constant(null)
           ),
-          started_at: fc.date().map((d) => d.toISOString()),
+          started_at: validDateArb,
           agent_identifier: fc.oneof(fc.string(), fc.constant(null)),
         }),
         (session) => {
@@ -101,7 +105,7 @@ describe("Property 20: Rug-pull tooltip wraps every 'rug pull' occurrence", () =
         fc.integer({ min: 0, max: 5000 }),
         fc.constant(null)
       ),
-      started_at: fc.date().map((d) => d.toISOString()),
+      started_at: validDateArb,
     });
 
     fc.assert(

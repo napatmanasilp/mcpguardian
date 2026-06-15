@@ -25,7 +25,7 @@ const mergedEventArb = (
     ),
     session_id: sessionId,
     server_id: serverId,
-    createdAt: fc.date().map((d) => d.toISOString()),
+    createdAt: fc.integer({ min: 1577836800000, max: 1893456000000 }).map((ts) => new Date(ts).toISOString()),
   });
 
 describe("Property 13: Activity event row link target follows session_id / server_id priority", () => {

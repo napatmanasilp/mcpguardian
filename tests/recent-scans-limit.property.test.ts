@@ -53,19 +53,32 @@ describe("Property 6: Server detail shows at most 5 recent scans", () => {
   });
 
   it("returns items sorted by created_at descending (most recent first)", () => {
+    // Use unique timestamps to avoid unstable sort issues with duplicates
     fc.assert(
       fc.property(
         fc.array(
           fc.record({
             id: fc.uuid(),
-            created_at: fc.date({
-              min: new Date("2020-01-01T00:00:00Z"),
-              max: new Date("2030-12-31T23:59:59Z"),
+            created_at: fc.integer({
+              min: new Date("2020-01-01T00:00:00Z").getTime(),
+              max: new Date("2030-12-31T23:59:59Z").getTime(),
             }),
           }),
           { minLength: 6, maxLength: 50 }
         ),
-        (scans) => {
+        (rawScans) => {
+          // Deduplicate timestamps to ensure strict ordering is testable
+          const seen = new Set<number>();
+          const scans = rawScans
+            .filter((s) => {
+              if (seen.has(s.created_at)) return false;
+              seen.add(s.created_at);
+              return true;
+            })
+            .map((s) => ({ ...s, created_at: new Date(s.created_at) }));
+
+          if (scans.length < 6) return true;
+
           const result = getRecentScans(scans);
 
           // Verify descending order

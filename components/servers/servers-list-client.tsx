@@ -173,7 +173,7 @@ export function ServersListClient({
                         </Badge>
                       </div>
                       <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
-                        <span>Risk: {server.risk_score ?? "—"}/100</span>
+                        <span>Score: {server.risk_score != null ? `${Math.max(0, 100 - server.risk_score)}/100` : "—"}</span>
                         <span>Latency: {latencyByServer[server.id] != null ? `${latencyByServer[server.id]}ms` : "—"}</span>
                         <span>Sessions: {sessionCountByServer[server.id] ?? 0}</span>
                         <span>Scan: {timeAgo(server.last_scan_at)}</span>
@@ -192,7 +192,7 @@ export function ServersListClient({
                         </Badge>
                       </div>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] font-mono text-slate-400 pl-4">
-                        <span>Risk: {server.risk_score ?? "—"}/100</span>
+                        <span>Score: {server.risk_score != null ? `${Math.max(0, 100 - server.risk_score)}/100` : "—"}</span>
                         <span>Scan: {timeAgo(server.last_scan_at)}</span>
                       </div>
                     </div>

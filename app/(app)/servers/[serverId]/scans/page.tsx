@@ -83,7 +83,7 @@ const ServerScansPage = async ({
                   <div>
                     <p className="text-sm text-slate-200 capitalize">{scan.overall_result ?? "unknown"}</p>
                     <p className="text-xs text-slate-500">
-                      Risk: {scan.risk_score ?? "—"} · Servers: {scan.servers_scanned ?? 1}
+                      Score: {scan.risk_score != null ? Math.max(0, 100 - scan.risk_score) : "—"}/100 · Servers: {scan.servers_scanned ?? 1}
                       {scan.trigger_reason && ` · ${scan.trigger_reason}`}
                     </p>
                   </div>
