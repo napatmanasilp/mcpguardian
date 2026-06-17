@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ServerActions } from "@/components/servers/server-actions";
 import { RescanButtonWithRefresh } from "@/components/servers/rescan-button-with-refresh";
-import { createClient } from "@/lib/supabase/server";
+import { ServerProFeatures } from "@/components/servers/server-pro-features";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getOrgContext } from "@/lib/data/org-context";
 import { cn } from "@/lib/utils";
 
 export async function generateMetadata({
@@ -55,27 +56,17 @@ const ServerDetailPage = async ({
 }: {
   params: Promise<{ serverId: string }>;
 }) => {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const orgContext = await getOrgContext();
+  if (!orgContext) redirect("/onboarding");
 
   const svc = createServiceClient();
-  const { data: membership } = await svc
-    .from("organization_members")
-    .select("organization_id")
-    .eq("user_id", user.id)
-    .eq("invitation_status", "accepted")
-    .single();
-
-  if (!membership) redirect("/onboarding");
-
   const { serverId } = await params;
 
   const { data: server } = await svc
     .from("mcp_servers")
     .select("*")
     .eq("id", serverId)
-    .eq("organization_id", membership.organization_id)
+    .eq("organization_id", orgContext.organizationId)
     .single();
 
   if (!server) notFound();
@@ -387,6 +378,9 @@ const ServerDetailPage = async ({
           </CardContent>
         </Card>
       )}
+
+      {/* Pro Features — Block Mode, Rug Pull Detection, Custom Scan Schedule */}
+      <ServerProFeatures currentPlan={orgContext.plan} serverId={serverId} />
     </main>
   );
 };

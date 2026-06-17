@@ -13,9 +13,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { getOrgContext } from "@/lib/data/org-context";
+import { hasFeature } from "@/lib/feature-gates";
+import { AlertChannelsGate } from "@/components/alerts/alert-channels-gate";
 import { cn } from "@/lib/utils";
 
 const AlertChannelsPage = async () => {
+  const orgContext = await getOrgContext();
+  if (!orgContext) redirect("/onboarding");
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
@@ -30,6 +36,9 @@ const AlertChannelsPage = async () => {
 
   if (!membership) redirect("/onboarding");
 
+  // Webhook forwarding requires Team plan
+  const hasWebhookAccess = hasFeature(orgContext.plan, "webhook_forwarding");
+
   const { data: channels } = await svc
     .from("alert_channels")
     .select("*")
@@ -43,13 +52,17 @@ const AlertChannelsPage = async () => {
           <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Alert Channels</p>
           <h1 className="text-2xl font-bold tracking-tight">Notification Channels</h1>
         </div>
-        <Button className="gap-2 shrink-0">
-          <Plus className="size-4" />
-          Add Channel
-        </Button>
+        {hasWebhookAccess && (
+          <Button className="gap-2 shrink-0">
+            <Plus className="size-4" />
+            Add Channel
+          </Button>
+        )}
       </div>
 
-      {channels && channels.length > 0 ? (
+      {!hasWebhookAccess ? (
+        <AlertChannelsGate currentPlan={orgContext.plan} />
+      ) : channels && channels.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {channels.map((ch) => (
             <Card key={ch.id} className="border-white/10 bg-[hsl(222,47%,6%)]">

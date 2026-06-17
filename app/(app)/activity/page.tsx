@@ -6,6 +6,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { ActivityPageClient } from "@/components/activity/activity-page-client";
 import { EmptyState } from "@/components/ui/empty-state";
 import { EMPTY_STATES } from "@/lib/ui/empty-states";
+import { hasFeature } from "@/lib/feature-gates";
 import type { MergedEvent } from "@/lib/types/activity";
 
 export const metadata: Metadata = {
@@ -65,6 +66,8 @@ export default async function ActivityPage() {
     <ActivityPageClient
       initialEvents={events}
       organizationId={organizationId}
+      currentPlan={orgContext.plan}
+      hasForensicTimeline={hasFeature(orgContext.plan, "forensic_timeline")}
     />
   );
 }

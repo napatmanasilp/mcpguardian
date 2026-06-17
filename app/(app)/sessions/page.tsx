@@ -15,8 +15,10 @@ import { getOrgContext } from "@/lib/data/org-context";
 import { EmptyState } from "@/components/ui/empty-state";
 import { EMPTY_STATES } from "@/lib/ui/empty-states";
 import { RugPullTooltip } from "@/components/sessions/rug-pull-tooltip";
+import { SessionsGateOverlay } from "@/components/sessions/sessions-gate-overlay";
 import { cn } from "@/lib/utils";
 import { computeTotalToolCalls } from "@/lib/utils/sessions";
+import { hasFeature } from "@/lib/feature-gates";
 
 function formatDuration(startedAt: string, endedAt: string | null): string {
   const end = endedAt ? new Date(endedAt).getTime() : Date.now();
@@ -47,6 +49,25 @@ const SessionsPage = async ({
 }) => {
   const org = await getOrgContext();
   if (!org) redirect("/onboarding");
+
+  // Free users can't access proxy sessions — show preview with upgrade gate
+  const hasProxy = hasFeature(org.plan, "session_watchdog");
+  if (!hasProxy) {
+    return (
+      <main className="flex flex-1 flex-col gap-6 p-4 md:p-6 overflow-x-hidden">
+        <div className="flex items-center justify-between">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-mono text-slate-500 uppercase tracking-widest mb-1">Protect</p>
+            <h1 className="text-2xl font-bold tracking-tight">Proxy Sessions</h1>
+            <p className="text-sm text-slate-500 mt-1 hidden sm:block">
+              Every agent connection routed through MCPGuardian
+            </p>
+          </div>
+        </div>
+        <SessionsGateOverlay currentPlan={org.plan} />
+      </main>
+    );
+  }
 
   const svc = createServiceClient();
   const params = await searchParams;

@@ -19,6 +19,8 @@ import { getOwaspMcpControls, getTriggeredOwaspIds } from "@/lib/compliance-mapp
 import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
 import { EMPTY_STATES } from "@/lib/ui/empty-states";
+import { hasFeature } from "@/lib/feature-gates";
+import { ComplianceGateOverlay } from "@/components/compliance/compliance-gate-overlay";
 import { cn } from "@/lib/utils";
 
 // Static control definitions — status is overridden by live assessment when available
@@ -85,6 +87,8 @@ function CircularProgress({ value, size = 140, strokeWidth = 10 }: { value: numb
 const CompliancePage = async () => {
   const orgContext = await getOrgContext();
   if (!orgContext) redirect("/onboarding");
+
+  const hasComplianceAccess = hasFeature(orgContext.plan, "compliance_report_nsa");
 
   const svc = createServiceClient();
 
@@ -189,24 +193,28 @@ const CompliancePage = async () => {
             </div>
 
             {/* PDF report download if available */}
-            {assessment?.pdf_report_url ? (
-              <a href={assessment.pdf_report_url} target="_blank" rel="noopener noreferrer" className="block w-full">
-                <Button variant="outline" className="border-white/10 gap-1.5 w-full">
-                  <FileText className="size-3.5" />
-                  Download PDF Report
-                </Button>
-              </a>
+            {hasComplianceAccess ? (
+              assessment?.pdf_report_url ? (
+                <a href={assessment.pdf_report_url} target="_blank" rel="noopener noreferrer" className="block w-full">
+                  <Button variant="outline" className="border-white/10 gap-1.5 w-full">
+                    <FileText className="size-3.5" />
+                    Download PDF Report
+                  </Button>
+                </a>
+              ) : (
+                <Link href="/compliance/reports" className="block w-full">
+                  <Button variant="outline" className="border-white/10 gap-1.5 w-full">
+                    <FileText className="size-3.5" />
+                    View Reports
+                  </Button>
+                </Link>
+              )
             ) : (
-              <Link href="/compliance/reports" className="block w-full">
-                <Button variant="outline" className="border-white/10 gap-1.5 w-full">
-                  <FileText className="size-3.5" />
-                  View Reports
-                </Button>
-              </Link>
+              <ComplianceGateOverlay currentPlan={orgContext.plan} variant="pdf" />
             )}
 
             {/* Request PDF Report */}
-            <RequestPdfButton />
+            {hasComplianceAccess && <RequestPdfButton />}
           </CardContent>
         </Card>
 
@@ -223,28 +231,32 @@ const CompliancePage = async () => {
             <CardTitle className="text-sm font-medium text-slate-400">Remediation</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {failedControls.length > 0 ? (
-              failedControls.map((control) => (
-                <div key={control.id} className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
-                  <p className="text-sm font-medium text-slate-200">{control.label}</p>
-                  <p className="text-xs text-slate-500">{control.action}</p>
-                  {control.link && (
-                    <a
-                      href={control.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                    >
-                      View guidance <ExternalLink className="size-3" />
-                    </a>
-                  )}
-                </div>
-              ))
+            {hasComplianceAccess ? (
+              failedControls.length > 0 ? (
+                failedControls.map((control) => (
+                  <div key={control.id} className="p-3 rounded-lg bg-white/5 border border-white/10 space-y-2">
+                    <p className="text-sm font-medium text-slate-200">{control.label}</p>
+                    <p className="text-xs text-slate-500">{control.action}</p>
+                    {control.link && (
+                      <a
+                        href={control.link}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                      >
+                        View guidance <ExternalLink className="size-3" />
+                      </a>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm flex items-center gap-2" style={{ color: "var(--secure)" }}>
+                  <CheckCircle2 className="size-4" />
+                  All controls passing
+                </p>
+              )
             ) : (
-              <p className="text-sm flex items-center gap-2" style={{ color: "var(--secure)" }}>
-                <CheckCircle2 className="size-4" />
-                All controls passing
-              </p>
+              <ComplianceGateOverlay currentPlan={orgContext.plan} variant="remediation" />
             )}
           </CardContent>
         </Card>

@@ -12,9 +12,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkline } from "@/components/telemetry/sparkline";
 import { EmptyState } from "@/components/ui/empty-state";
+import { TelemetryProFeatures } from "@/components/telemetry/telemetry-pro-features";
 import { getOrgContext } from "@/lib/data/org-context";
 import { createServiceClient } from "@/lib/supabase/service";
 import { EMPTY_STATES } from "@/lib/ui/empty-states";
+import { hasFeature } from "@/lib/feature-gates";
 import { computeUptime, hasInsufficientData } from "@/lib/utils/telemetry";
 import { cn } from "@/lib/utils";
 
@@ -203,6 +205,9 @@ const TelemetryPage = async () => {
           </div>
         </div>
       )}
+
+      {/* Pro Features: Cross-server analysis, OTel export, etc. */}
+      <TelemetryProFeatures currentPlan={ctx.plan} />
     </main>
   );
 };
